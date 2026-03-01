@@ -1,0 +1,564 @@
+You are a senior full-stack engineer. Build a complete Hotel Room & Tent Booking Web Application from scratch with the following exact specifications. Do not skip any module. Build everything end-to-end, fully functional.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+🧱 TECH STACK
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+- Frontend: Angular 17+ (Standalone Components, Angular Router, Reactive Forms, HttpClient)
+- Backend: Node.js + Express.js (REST API, JWT Auth, Multer for file uploads)
+- Database: SQLite via better-sqlite3 (synchronous, no ORM)
+- Payment: Razorpay (India) — order creation + webhook verification
+- PDF: PDFKit for receipt generation
+- Image Storage: Local filesystem under /uploads/rooms and /uploads/tents
+- Styling: SCSS + Angular Material or TailwindCSS (pick TailwindCSS)
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+📁 MONOREPO FOLDER STRUCTURE
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+/project-root
+├── backend/
+│   ├── server.js
+│   ├── .env
+│   ├── package.json
+│   ├── db/
+│   │   ├── database.js          # SQLite connection singleton
+│   │   └── migrations.js        # Run all CREATE TABLE statements
+│   ├── routes/
+│   │   ├── auth.routes.js
+│   │   ├── rooms.routes.js
+│   │   ├── tents.routes.js
+│   │   ├── bookings.routes.js
+│   │   ├── payments.routes.js
+│   │   ├── receipts.routes.js
+│   │   ├── enquiry.routes.js
+│   │   └── admin.routes.js
+│   ├── controllers/
+│   │   ├── auth.controller.js
+│   │   ├── room.controller.js
+│   │   ├── tent.controller.js
+│   │   ├── booking.controller.js
+│   │   ├── payment.controller.js
+│   │   ├── receipt.controller.js
+│   │   ├── enquiry.controller.js
+│   │   └── admin.controller.js
+│   ├── middleware/
+│   │   ├── auth.middleware.js    # JWT verify, role check
+│   │   └── upload.middleware.js  # Multer config
+│   ├── utils/
+│   │   ├── pdfGenerator.js       # PDFKit receipt builder
+│   │   └── razorpay.js           # Razorpay instance + helpers
+│   └── uploads/
+│       ├── rooms/
+│       └── tents/
+│
+└── frontend/
+    ├── angular.json
+    ├── tailwind.config.js
+    ├── src/
+    │   ├── app/
+    │   │   ├── app.config.ts
+    │   │   ├── app.routes.ts
+    │   │   ├── core/
+    │   │   │   ├── services/
+    │   │   │   │   ├── auth.service.ts
+    │   │   │   │   ├── room.service.ts
+    │   │   │   │   ├── tent.service.ts
+    │   │   │   │   ├── booking.service.ts
+    │   │   │   │   ├── payment.service.ts
+    │   │   │   │   └── enquiry.service.ts
+    │   │   │   ├── guards/
+    │   │   │   │   ├── auth.guard.ts
+    │   │   │   │   └── admin.guard.ts
+    │   │   │   └── interceptors/
+    │   │   │       └── jwt.interceptor.ts
+    │   │   ├── shared/
+    │   │   │   ├── components/
+    │   │   │   │   ├── navbar/
+    │   │   │   │   ├── footer/
+    │   │   │   │   ├── property-card/
+    │   │   │   │   ├── image-gallery/
+    │   │   │   │   └── loading-spinner/
+    │   │   │   └── pipes/
+    │   │   │       └── currency-inr.pipe.ts
+    │   │   └── pages/
+    │   │       ├── home/
+    │   │       ├── room-search/
+    │   │       ├── tent-search/
+    │   │       ├── property-detail/
+    │   │       ├── booking/
+    │   │       ├── payment/
+    │   │       ├── receipt/
+    │   │       ├── enquiry/
+    │   │       ├── my-bookings/
+    │   │       ├── auth/
+    │   │       │   ├── login/
+    │   │       │   └── register/
+    │   │       └── admin/
+    │   │           ├── dashboard/
+    │   │           ├── manage-rooms/
+    │   │           ├── manage-tents/
+    │   │           ├── room-form/
+    │   │           ├── tent-form/
+    │   │           ├── price-settings/
+    │   │           ├── bookings-list/
+    │   │           └── enquiries-list/
+    │   └── environments/
+    │       ├── environment.ts
+    │       └── environment.prod.ts
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+🗄️ DATABASE SCHEMA (SQLite — run on app start)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Run all migrations in db/migrations.js using better-sqlite3 synchronous API.
+
+CREATE TABLE IF NOT EXISTS users (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  name TEXT NOT NULL,
+  email TEXT UNIQUE NOT NULL,
+  password_hash TEXT NOT NULL,
+  phone TEXT,
+  role TEXT DEFAULT 'customer',  -- 'customer' | 'admin'
+  created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS rooms (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  name TEXT NOT NULL,
+  type TEXT NOT NULL,             -- 'standard' | 'deluxe' | 'suite' | 'family'
+  description TEXT,
+  capacity INTEGER DEFAULT 2,
+  base_price REAL NOT NULL,
+  amenities TEXT,                 -- JSON stringified array
+  status TEXT DEFAULT 'active',   -- 'active' | 'inactive'
+  created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS room_images (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  room_id INTEGER REFERENCES rooms(id) ON DELETE CASCADE,
+  image_path TEXT NOT NULL,
+  is_primary INTEGER DEFAULT 0
+);
+
+CREATE TABLE IF NOT EXISTS tents (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  name TEXT NOT NULL,
+  type TEXT NOT NULL,             -- 'standard' | 'luxury' | 'safari' | 'honeymoon'
+  description TEXT,
+  capacity INTEGER DEFAULT 2,
+  base_price REAL NOT NULL,
+  amenities TEXT,                 -- JSON stringified array
+  status TEXT DEFAULT 'active',
+  created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS tent_images (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  tent_id INTEGER REFERENCES tents(id) ON DELETE CASCADE,
+  image_path TEXT NOT NULL,
+  is_primary INTEGER DEFAULT 0
+);
+
+CREATE TABLE IF NOT EXISTS bookings (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  booking_ref TEXT UNIQUE NOT NULL,  -- e.g. BK-2025-00042
+  user_id INTEGER REFERENCES users(id),
+  property_type TEXT NOT NULL,       -- 'room' | 'tent'
+  property_id INTEGER NOT NULL,
+  check_in DATE NOT NULL,
+  check_out DATE NOT NULL,
+  guests INTEGER DEFAULT 1,
+  nights INTEGER NOT NULL,
+  base_amount REAL NOT NULL,
+  tax_amount REAL NOT NULL,
+  total_amount REAL NOT NULL,
+  special_requests TEXT,
+  status TEXT DEFAULT 'pending',     -- 'pending' | 'confirmed' | 'cancelled' | 'completed'
+  payment_status TEXT DEFAULT 'unpaid', -- 'unpaid' | 'paid' | 'refunded'
+  created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS payments (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  booking_id INTEGER REFERENCES bookings(id),
+  razorpay_order_id TEXT,
+  razorpay_payment_id TEXT,
+  razorpay_signature TEXT,
+  amount REAL NOT NULL,
+  currency TEXT DEFAULT 'INR',
+  status TEXT DEFAULT 'pending',    -- 'pending' | 'success' | 'failed'
+  paid_at DATETIME,
+  created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS price_settings (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  property_type TEXT NOT NULL,      -- 'room' | 'tent'
+  property_id INTEGER NOT NULL,
+  season TEXT DEFAULT 'all',        -- 'peak' | 'off' | 'all'
+  price_per_night REAL NOT NULL,
+  weekend_surcharge REAL DEFAULT 0,
+  tax_percent REAL DEFAULT 18,
+  updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS enquiries (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  name TEXT NOT NULL,
+  email TEXT NOT NULL,
+  phone TEXT,
+  interested_in TEXT,              -- 'room' | 'tent' | 'both' | 'group'
+  approx_guests INTEGER,
+  message TEXT,
+  status TEXT DEFAULT 'new',       -- 'new' | 'read' | 'replied'
+  created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+);
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+🔌 BACKEND API ENDPOINTS (Express.js)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+AUTH
+  POST   /api/auth/register
+  POST   /api/auth/login
+  GET    /api/auth/me               [JWT required]
+
+ROOMS (Public)
+  GET    /api/rooms                 ?type=&minPrice=&maxPrice=&capacity=
+  GET    /api/rooms/search          ?checkin=&checkout=&guests=&type=
+  GET    /api/rooms/:id
+  GET    /api/rooms/:id/images
+
+TENTS (Public)
+  GET    /api/tents                 ?type=&minPrice=&maxPrice=&capacity=
+  GET    /api/tents/search          ?checkin=&checkout=&guests=&type=
+  GET    /api/tents/:id
+  GET    /api/tents/:id/images
+
+BOOKINGS [JWT required]
+  POST   /api/bookings              { propertyType, propertyId, checkIn, checkOut, guests, specialRequests }
+  GET    /api/bookings/my           (customer's own bookings)
+  GET    /api/bookings/:id
+  PUT    /api/bookings/:id/cancel
+
+PAYMENTS [JWT required]
+  POST   /api/payments/create-order { bookingId }   → returns razorpay order
+  POST   /api/payments/verify       { razorpayOrderId, razorpayPaymentId, razorpaySignature, bookingId }
+  GET    /api/payments/booking/:bookingId
+
+RECEIPTS [JWT required]
+  GET    /api/receipts/:bookingId   → streams PDF receipt
+
+ENQUIRIES (Public)
+  POST   /api/enquiry               { name, email, phone, interestedIn, approxGuests, message }
+
+ADMIN [JWT + role:admin required]
+  GET    /api/admin/dashboard       → { totalBookings, revenue, occupancy, pendingEnquiries, recentBookings }
+  
+  GET    /api/admin/rooms
+  POST   /api/admin/rooms           { name, type, description, capacity, basePrice, amenities }
+  PUT    /api/admin/rooms/:id
+  DELETE /api/admin/rooms/:id
+  POST   /api/admin/rooms/:id/images   [multipart, up to 10 images]
+  DELETE /api/admin/rooms/:id/images/:imageId
+  PUT    /api/admin/rooms/:id/images/:imageId/primary
+
+  GET    /api/admin/tents
+  POST   /api/admin/tents
+  PUT    /api/admin/tents/:id
+  DELETE /api/admin/tents/:id
+  POST   /api/admin/tents/:id/images   [multipart, up to 10 images]
+  DELETE /api/admin/tents/:id/images/:imageId
+
+  GET    /api/admin/bookings        ?status=&propertyType=&from=&to=
+  PUT    /api/admin/bookings/:id/status   { status }
+
+  GET    /api/admin/price-settings
+  POST   /api/admin/price-settings
+  PUT    /api/admin/price-settings/:id
+  DELETE /api/admin/price-settings/:id
+
+  GET    /api/admin/enquiries       ?status=
+  PUT    /api/admin/enquiries/:id/status   { status }
+  DELETE /api/admin/enquiries/:id
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+⚙️ BACKEND IMPLEMENTATION DETAILS
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+server.js:
+- Express app with cors, helmet, express.json()
+- Serve /uploads as static
+- Mount all routes under /api
+- Run migrations on startup
+- Global error handler middleware
+
+auth.middleware.js:
+- verifyToken: decode JWT, attach req.user
+- requireAdmin: check req.user.role === 'admin'
+
+upload.middleware.js:
+- Multer diskStorage to /uploads/rooms or /uploads/tents
+- Accept only image/jpeg, image/png, image/webp
+- Max file size: 5MB, max 10 files
+
+booking logic in booking.controller.js:
+- Check availability: query bookings table for overlapping dates for that property_id
+- Generate booking_ref: 'BK-' + year + '-' + padded id
+- Calculate nights = checkout - checkin in days
+- Fetch price from price_settings table (fall back to room/tent base_price if not set)
+- Apply tax (18% GST)
+- Insert booking with status 'pending'
+
+payment.controller.js:
+- createOrder: create Razorpay order with amount in paise, store razorpay_order_id in payments table
+- verify: use crypto.createHmac to verify signature. On success: update payment status='success', booking payment_status='paid', booking status='confirmed'
+
+pdfGenerator.js:
+- Use PDFKit
+- Generate receipt with: company header, booking reference, guest details, property details, check-in/out, nights, breakdown (base + tax + total), payment ID, QR placeholder
+- Return as Buffer
+
+admin dashboard controller:
+- Total bookings (all time + this month)
+- Total revenue (sum of paid bookings)
+- Current occupancy % (confirmed bookings today / total active properties)
+- Pending enquiries count
+- Last 10 bookings with guest name, property, dates, amount, status
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+🅰️ FRONTEND ANGULAR IMPLEMENTATION
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Use Angular 17 standalone components throughout. No NgModules.
+
+app.routes.ts — define lazy routes:
+  /                        → HomeComponent
+  /rooms                   → RoomSearchComponent
+  /tents                   → TentSearchComponent
+  /property/:type/:id      → PropertyDetailComponent
+  /booking/:type/:id       → BookingComponent        [AuthGuard]
+  /payment/:bookingId      → PaymentComponent        [AuthGuard]
+  /receipt/:bookingId      → ReceiptComponent        [AuthGuard]
+  /my-bookings             → MyBookingsComponent     [AuthGuard]
+  /enquiry                 → EnquiryComponent
+  /login                   → LoginComponent
+  /register                → RegisterComponent
+  /admin                   → AdminLayoutComponent    [AdminGuard]
+    /admin/dashboard       → DashboardComponent
+    /admin/rooms           → ManageRoomsComponent
+    /admin/rooms/new       → RoomFormComponent
+    /admin/rooms/:id/edit  → RoomFormComponent
+    /admin/tents           → ManageTentsComponent
+    /admin/tents/new       → TentFormComponent
+    /admin/tents/:id/edit  → TentFormComponent
+    /admin/price-settings  → PriceSettingsComponent
+    /admin/bookings        → BookingsListComponent
+    /admin/enquiries       → EnquiriesListComponent
+
+jwt.interceptor.ts:
+- Read token from localStorage
+- Attach as Authorization: Bearer <token> header on all /api requests
+
+auth.service.ts:
+- login(), register(), logout(), isLoggedIn(), isAdmin(), getCurrentUser()
+- Store JWT in localStorage, decode with atob to get role
+
+PAGES — implement fully:
+
+HOME PAGE:
+- Hero section with headline, CTA buttons (Search Rooms, Search Tents)
+- Availability search widget with tabs (Rooms / Tents), date pickers, guest count, type dropdown, Search button
+- Featured rooms grid (3 cards)
+- Featured tents grid (3 cards)
+- Why Choose Us section
+- Enquiry teaser banner
+- Property card shows: primary image, name, type badge, capacity, price/night, Book Now button
+
+ROOM SEARCH PAGE:
+- Filter sidebar: price range slider, capacity, room type checkboxes
+- Results grid with PropertyCard components
+- Each card has image carousel, amenities icons, price, Book Now
+- No results state
+- Loading skeleton
+
+TENT SEARCH PAGE:
+- Same as Room Search but for tents
+- Tent-specific filters: tent type, has bonfire, stargazing
+
+PROPERTY DETAIL PAGE (/property/room/3 or /property/tent/5):
+- Full image gallery (click to zoom)
+- Name, type, description
+- Amenities grid with icons
+- Capacity, price per night
+- Availability calendar (highlight booked dates)
+- Booking form sidebar: check-in, check-out, guests → shows price breakdown → Book Now button
+- Scroll to booking form on CTA click
+
+BOOKING PAGE:
+- Booking summary (property, dates, nights, guests)
+- Price breakdown: base amount, tax (18% GST), total
+- Guest details form: name (pre-filled), email, phone, special requests
+- Confirm Booking button → calls POST /api/bookings → redirects to /payment/:bookingId
+
+PAYMENT PAGE:
+- Booking summary recap
+- Pay Now button → calls POST /api/payments/create-order → opens Razorpay checkout modal
+- On success: calls POST /api/payments/verify → redirects to /receipt/:bookingId
+- On failure: show error with retry button
+- Load Razorpay script dynamically: https://checkout.razorpay.com/v1/checkout.js
+
+RECEIPT PAGE:
+- Show full booking details in a styled receipt layout
+- Download PDF button → GET /api/receipts/:bookingId (triggers PDF download)
+- Print button
+- Go to My Bookings button
+
+MY BOOKINGS PAGE:
+- Table/list of all user bookings
+- Columns: Ref, Property, Type, Dates, Guests, Amount, Status, Payment Status, Action
+- Cancel button for pending/confirmed future bookings
+- View Receipt link for paid bookings
+
+ENQUIRY PAGE:
+- Full enquiry form with validation
+- Fields: Name, Email, Phone, Interested In (dropdown), Approx Guests, Message
+- On submit: POST /api/enquiry → show success confirmation
+
+ADMIN DASHBOARD:
+- Stat cards: Total Bookings, This Month Revenue, Occupancy %, Pending Enquiries
+- Recent bookings table (last 10)
+- Quick links to all admin sections
+- Sidebar navigation with all admin routes
+
+ADMIN MANAGE ROOMS:
+- Table: ID, Name, Type, Capacity, Price, Status, Images count, Actions
+- Actions: Edit, Delete, Manage Images, Toggle Status
+- Add Room button → navigates to /admin/rooms/new
+
+ADMIN ROOM FORM (add/edit):
+- Fields: Name, Type (select), Description (textarea), Capacity, Base Price, Amenities (multi-select tags), Status
+- Image upload section: drag-drop or file picker, preview thumbnails, set primary image, delete image
+- Submit calls POST or PUT accordingly
+
+ADMIN MANAGE TENTS: (same as rooms but tent fields)
+
+ADMIN PRICE SETTINGS:
+- Table of all price settings grouped by property
+- Inline edit: price_per_night, weekend_surcharge, tax_percent, season
+- Add new price rule form
+- Apply to All button per property type
+
+ADMIN BOOKINGS LIST:
+- Full bookings table with filters: status, property type, date range
+- Update status dropdown per booking
+- View receipt link
+
+ADMIN ENQUIRIES LIST:
+- Table: Name, Email, Phone, Interested In, Message preview, Status, Date
+- Mark as Read / Mark as Replied actions
+- Delete enquiry
+- Status filter tabs (New / Read / Replied)
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+🎨 UI / DESIGN SYSTEM
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Color palette (set in tailwind.config.js as custom colors):
+  cream:        #f5f0e8
+  sand:         #e8dcc8
+  forest:       #2d4a2d
+  forest-light: #3d6b3d
+  gold:         #c9952a
+  earth:        #8b6914
+  stone:        #5c4a32
+  dark:         #1a1208
+  muted:        #7a6a52
+
+Typography:
+  - Headings: Playfair Display (Google Fonts)
+  - Body: DM Sans (Google Fonts)
+  - Import in styles.scss
+
+Component styles:
+  - All buttons: rounded-none (sharp corners), uppercase, tracking-widest
+  - Primary button: bg-forest text-cream hover:bg-forest-light
+  - Gold accent button: bg-gold text-white hover:bg-earth
+  - Cards: shadow-none border border-sand hover:-translate-y-1 hover:shadow-xl transition
+  - Inputs: border border-sand bg-cream focus:border-forest outline-none rounded-none
+  - Admin sidebar: bg-dark text-cream, active item: bg-forest
+  - Status badges: confirmed=green, pending=yellow, cancelled=red, paid=emerald
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+📦 PACKAGE DEPENDENCIES
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Backend (package.json):
+  express, better-sqlite3, bcryptjs, jsonwebtoken,
+  multer, razorpay, pdfkit, cors, helmet, dotenv, crypto (built-in)
+
+Frontend (package.json):
+  @angular/core@17, @angular/router, @angular/forms,
+  @angular/common/http, tailwindcss, autoprefixer, postcss
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+🔐 ENVIRONMENT CONFIG
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+backend/.env:
+  PORT=3000
+  JWT_SECRET=your_super_secret_key_here
+  JWT_EXPIRES_IN=7d
+  RAZORPAY_KEY_ID=rzp_test_xxxxxxxxxxxx
+  RAZORPAY_KEY_SECRET=your_razorpay_secret
+  DB_PATH=./db/booking.sqlite
+  UPLOAD_DIR=./uploads
+  TAX_PERCENT=18
+
+frontend/src/environments/environment.ts:
+  apiUrl: 'http://localhost:3000/api'
+  razorpayKeyId: 'rzp_test_xxxxxxxxxxxx'
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+✅ EXECUTION ORDER — BUILD IN THIS SEQUENCE
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+1. Create monorepo folders
+2. Initialize backend: npm init, install deps, create server.js
+3. Create db/database.js and db/migrations.js — run once on start
+4. Build all middleware (auth, upload)
+5. Build all controllers with full logic
+6. Mount all routes in server.js
+7. Seed one admin user (email: admin@hotel.com, password: admin123)
+8. Seed 3 rooms and 3 tents with sample data
+9. Initialize Angular frontend: ng new frontend --standalone --routing --style=scss
+10. Install TailwindCSS, configure tailwind.config.js
+11. Import Google Fonts in styles.scss
+12. Build core services and interceptor
+13. Build shared components (navbar, footer, property-card)
+14. Build pages in order: home → room-search → tent-search → property-detail → booking → payment → receipt → my-bookings → enquiry → auth pages
+15. Build admin layout with sidebar
+16. Build all admin pages
+17. Wire all routes in app.routes.ts
+18. Test full flow: register → search → book → pay → receipt
+19. Test admin flow: login as admin → add room with images → set price → view dashboard
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+⚠️ IMPORTANT RULES FOR CODE GENERATION
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+- Every file must be complete — no placeholder comments like "// TODO" or "// implement later"
+- All API calls must handle loading state, success state, and error state in the UI
+- All forms must have proper Reactive Form validation with error messages shown in UI
+- Backend must validate all inputs and return proper HTTP status codes (400, 401, 403, 404, 500)
+- Image paths returned by API must be full URLs (http://localhost:3000/uploads/rooms/filename.jpg)
+- Availability check must exclude cancelled bookings
+- Admin guard must redirect non-admins to /login
+- JWT interceptor must catch 401 errors and auto-logout + redirect to /login
+- Use async/await everywhere in backend, no callback hell
+- All SQLite queries use prepared statements (db.prepare().run() / .get() / .all())
+- Razorpay payment modal must open inline, not in a new tab
+- PDF receipt must be downloadable as a file, not opened in browser
+
+Now build the entire project following this specification exactly.

@@ -1,0 +1,618 @@
+const { getDb } = require('../db/database');
+require('dotenv').config();
+
+function getTodayDateString() {
+  const d = new Date();
+  return d.toISOString().slice(0, 10);
+}
+
+async function getDashboard(req, res) {
+  try {
+    const db = getDb();
+
+    const totalBookings = db.prepare('SELECT COUNT(*) as count FROM bookings').get().count;
+
+    const thisMonthStart = new Date();
+    thisMonthStart.setDate(1);
+    const monthStartStr = thisMonthStart.toISOString().slice(0, 10);
+    const thisMonthRevenue = db
+      .prepare(
+        `SELECT IFNULL(SUM(total_amount), 0) as revenue
+         FROM bookings
+         WHERE payment_status = 'paid' AND date(created_at) >= date(?)`
+      )
+      .get(monthStartStr).revenue;
+
+    const today = getTodayDateString();
+    const activeRooms = db.prepare("SELECT COUNT(*) as c FROM rooms WHERE status = 'active'").get()
+      .c;
+    const activeTents = db.prepare("SELECT COUNT(*) as c FROM tents WHERE status = 'active'").get()
+      .c;
+    const totalProperties = activeRooms + activeTents || 1;
+
+    const todaysConfirmed = db
+      .prepare(
+        `SELECT COUNT(*) as c FROM bookings 
+         WHERE status = 'confirmed' 
+           AND date(check_in) <= date(?) 
+           AND date(check_out) > date(?)`
+      )
+      .get(today, today).c;
+    const occupancy = (todaysConfirmed / totalProperties) * 100;
+
+    const pendingEnquiries = db
+      .prepare(`SELECT COUNT(*) as c FROM enquiries WHERE status = 'new'`)
+      .get().c;
+
+    const recentBookings = db
+      .prepare(
+        `SELECT b.*, u.name as guest_name 
+         FROM bookings b 
+         LEFT JOIN users u ON u.id = b.user_id
+         ORDER BY b.created_at DESC
+         LIMIT 10`
+      )
+      .all();
+
+    return res.json({
+      totalBookings,
+      thisMonthRevenue,
+      occupancy: Number(occupancy.toFixed(2)),
+      pendingEnquiries,
+      recentBookings
+    });
+  } catch (err) {
+    console.error('Get dashboard error', err);
+    return res.status(500).json({ message: 'Internal server error' });
+  }
+}
+
+async function listRooms(req, res) {
+  try {
+    const db = getDb();
+    const rooms = db.prepare('SELECT * FROM rooms').all();
+    return res.json(rooms);
+  } catch (err) {
+    console.error('Admin list rooms error', err);
+    return res.status(500).json({ message: 'Internal server error' });
+  }
+}
+
+async function createRoom(req, res) {
+  try {
+    const { name, type, description, capacity, basePrice, amenities, status } = req.body;
+    if (!name || !type || !basePrice) {
+      return res
+        .status(400)
+        .json({ message: 'Name, type and basePrice are required for a room' });
+    }
+    const db = getDb();
+    const stmt = db.prepare(
+      `INSERT INTO rooms (name, type, description, capacity, basePrice, amenities, status)
+       VALUES (?, ?, ?, ?, ?, ?, ?)`
+    );
+    const info = stmt.run(
+      name,
+      type,
+      description || null,
+      capacity || 2,
+      basePrice,
+      amenities ? JSON.stringify(amenities) : null,
+      status || 'active'
+    );
+    const room = db.prepare('SELECT * FROM rooms WHERE id = ?').get(info.lastInsertRowid);
+    return res.status(201).json(room);
+  } catch (err) {
+    console.error('Admin create room error', err);
+    return res.status(500).json({ message: 'Internal server error' });
+  }
+}
+
+async function updateRoom(req, res) {
+  try {
+    const id = Number(req.params.id);
+    const { name, type, description, capacity, basePrice, amenities, status } = req.body;
+    const db = getDb();
+    const existing = db.prepare('SELECT * FROM rooms WHERE id = ?').get(id);
+    if (!existing) {
+      return res.status(404).json({ message: 'Room not found' });
+    }
+    const stmt = db.prepare(
+      `UPDATE rooms SET 
+        name = ?, type = ?, description = ?, capacity = ?, 
+        basePrice = ?, amenities = ?, status = ?
+       WHERE id = ?`
+    );
+    stmt.run(
+      name || existing.name,
+      type || existing.type,
+      description || existing.description,
+      capacity || existing.capacity,
+      basePrice != null ? basePrice : existing.basePrice,
+      amenities ? JSON.stringify(amenities) : existing.amenities,
+      status || existing.status,
+      id
+    );
+    const room = db.prepare('SELECT * FROM rooms WHERE id = ?').get(id);
+    return res.json(room);
+  } catch (err) {
+    console.error('Admin update room error', err);
+    return res.status(500).json({ message: 'Internal server error' });
+  }
+}
+
+async function deleteRoom(req, res) {
+  try {
+    const id = Number(req.params.id);
+    const db = getDb();
+    const existing = db.prepare('SELECT * FROM rooms WHERE id = ?').get(id);
+    if (!existing) {
+      return res.status(404).json({ message: 'Room not found' });
+    }
+    db.prepare('DELETE FROM rooms WHERE id = ?').run(id);
+    return res.json({ success: true });
+  } catch (err) {
+    console.error('Admin delete room error', err);
+    return res.status(500).json({ message: 'Internal server error' });
+  }
+}
+
+async function uploadRoomImages(req, res) {
+  try {
+    const roomId = Number(req.params.id);
+    const db = getDb();
+    const room = db.prepare('SELECT * FROM rooms WHERE id = ?').get(roomId);
+    if (!room) {
+      return res.status(404).json({ message: 'Room not found' });
+    }
+    if (!req.files || !req.files.length) {
+      return res.status(400).json({ message: 'No images uploaded' });
+    }
+
+    const insert = db.prepare(
+      'INSERT INTO room_images (room_id, image_path, is_primary) VALUES (?, ?, ?)'
+    );
+    const existingPrimary = db
+      .prepare('SELECT 1 FROM room_images WHERE room_id = ? AND is_primary = 1')
+      .get(roomId);
+
+    const images = [];
+    req.files.forEach((file, index) => {
+      const isPrimary = !existingPrimary && index === 0 ? 1 : 0;
+      const info = insert.run(roomId, file.path, isPrimary);
+      images.push({
+        id: info.lastInsertRowid,
+        room_id: roomId,
+        image_path: file.path,
+        is_primary: isPrimary
+      });
+    });
+
+    return res.status(201).json(images);
+  } catch (err) {
+    console.error('Admin upload room images error', err);
+    return res.status(500).json({ message: 'Internal server error' });
+  }
+}
+
+async function deleteRoomImage(req, res) {
+  try {
+    const roomId = Number(req.params.id);
+    const imageId = Number(req.params.imageId);
+    const db = getDb();
+    const existing = db
+      .prepare('SELECT * FROM room_images WHERE id = ? AND room_id = ?')
+      .get(imageId, roomId);
+    if (!existing) {
+      return res.status(404).json({ message: 'Image not found' });
+    }
+    db.prepare('DELETE FROM room_images WHERE id = ?').run(imageId);
+    return res.json({ success: true });
+  } catch (err) {
+    console.error('Admin delete room image error', err);
+    return res.status(500).json({ message: 'Internal server error' });
+  }
+}
+
+async function setPrimaryRoomImage(req, res) {
+  try {
+    const roomId = Number(req.params.id);
+    const imageId = Number(req.params.imageId);
+    const db = getDb();
+    const existing = db
+      .prepare('SELECT * FROM room_images WHERE id = ? AND room_id = ?')
+      .get(imageId, roomId);
+    if (!existing) {
+      return res.status(404).json({ message: 'Image not found' });
+    }
+    db.prepare('UPDATE room_images SET is_primary = 0 WHERE room_id = ?').run(roomId);
+    db.prepare('UPDATE room_images SET is_primary = 1 WHERE id = ?').run(imageId);
+    return res.json({ success: true });
+  } catch (err) {
+    console.error('Admin set primary room image error', err);
+    return res.status(500).json({ message: 'Internal server error' });
+  }
+}
+
+async function listTents(req, res) {
+  try {
+    const db = getDb();
+    const tents = db.prepare('SELECT * FROM tents').all();
+    return res.json(tents);
+  } catch (err) {
+    console.error('Admin list tents error', err);
+    return res.status(500).json({ message: 'Internal server error' });
+  }
+}
+
+async function createTent(req, res) {
+  try {
+    const { name, type, description, capacity, basePrice, amenities, status } = req.body;
+    
+    if (!name || !type || !basePrice) {
+      return res
+        .status(400)
+        .json({ message: 'Name, type and basePrice are required for a tent' });
+    }
+    const db = getDb();
+    const stmt = db.prepare(
+      `INSERT INTO tents (name, type, description, capacity, basePrice, amenities, status)
+       VALUES (?, ?, ?, ?, ?, ?, ?)`
+    );
+    const info = stmt.run(
+      name,
+      type,
+      description || null,
+      capacity || 2,
+      basePrice,
+      amenities ? JSON.stringify(amenities) : null,
+      status || 'active'
+    );
+    const tent = db.prepare('SELECT * FROM tents WHERE id = ?').get(info.lastInsertRowid);
+    return res.status(201).json(tent);
+  } catch (err) {
+    console.error('Admin create tent error', err);
+    return res.status(500).json({ message: 'Internal server error' });
+  }
+}
+
+async function updateTent(req, res) {
+  try {
+    const id = Number(req.params.id);
+    const { name, type, description, capacity, basePrice, amenities, status } = req.body;
+    const db = getDb();
+    const existing = db.prepare('SELECT * FROM tents WHERE id = ?').get(id);
+    if (!existing) {
+      return res.status(404).json({ message: 'Tent not found' });
+    }
+    const stmt = db.prepare(
+      `UPDATE tents SET 
+        name = ?, type = ?, description = ?, capacity = ?, 
+        basePrice = ?, amenities = ?, status = ?
+       WHERE id = ?`
+    );
+    stmt.run(
+      name || existing.name,
+      type || existing.type,
+      description || existing.description,
+      capacity || existing.capacity,
+      basePrice != null ? basePrice : existing.basePrice,
+      amenities ? JSON.stringify(amenities) : existing.amenities,
+      status || existing.status,
+      id
+    );
+    const tent = db.prepare('SELECT * FROM tents WHERE id = ?').get(id);
+    return res.json(tent);
+  } catch (err) {
+    console.error('Admin update tent error', err);
+    return res.status(500).json({ message: 'Internal server error' });
+  }
+}
+
+async function deleteTent(req, res) {
+  try {
+    const id = Number(req.params.id);
+    const db = getDb();
+    const existing = db.prepare('SELECT * FROM tents WHERE id = ?').get(id);
+    if (!existing) {
+      return res.status(404).json({ message: 'Tent not found' });
+    }
+    db.prepare('DELETE FROM tents WHERE id = ?').run(id);
+    return res.json({ success: true });
+  } catch (err) {
+    console.error('Admin delete tent error', err);
+    return res.status(500).json({ message: 'Internal server error' });
+  }
+}
+
+async function uploadTentImages(req, res) {
+  try {
+    const tentId = Number(req.params.id);
+    const db = getDb();
+    const tent = db.prepare('SELECT * FROM tents WHERE id = ?').get(tentId);
+    if (!tent) {
+      return res.status(404).json({ message: 'Tent not found' });
+    }
+    if (!req.files || !req.files.length) {
+      return res.status(400).json({ message: 'No images uploaded' });
+    }
+
+    const insert = db.prepare(
+      'INSERT INTO tent_images (tent_id, image_path, is_primary) VALUES (?, ?, ?)'
+    );
+    const existingPrimary = db
+      .prepare('SELECT 1 FROM tent_images WHERE tent_id = ? AND is_primary = 1')
+      .get(tentId);
+
+    const images = [];
+    req.files.forEach((file, index) => {
+      const isPrimary = !existingPrimary && index === 0 ? 1 : 0;
+      const info = insert.run(tentId, file.path, isPrimary);
+      images.push({
+        id: info.lastInsertRowid,
+        tent_id: tentId,
+        image_path: file.path,
+        is_primary: isPrimary
+      });
+    });
+
+    return res.status(201).json(images);
+  } catch (err) {
+    console.error('Admin upload tent images error', err);
+    return res.status(500).json({ message: 'Internal server error' });
+  }
+}
+
+async function deleteTentImage(req, res) {
+  try {
+    const tentId = Number(req.params.id);
+    const imageId = Number(req.params.imageId);
+    const db = getDb();
+    const existing = db
+      .prepare('SELECT * FROM tent_images WHERE id = ? AND tent_id = ?')
+      .get(imageId, tentId);
+    if (!existing) {
+      return res.status(404).json({ message: 'Image not found' });
+    }
+    db.prepare('DELETE FROM tent_images WHERE id = ?').run(imageId);
+    return res.json({ success: true });
+  } catch (err) {
+    console.error('Admin delete tent image error', err);
+    return res.status(500).json({ message: 'Internal server error' });
+  }
+}
+
+async function listAdminBookings(req, res) {
+  try {
+    const { status, propertyType, from, to } = req.query;
+    const db = getDb();
+    let query = `SELECT b.*, u.name as guest_name 
+                 FROM bookings b
+                 LEFT JOIN users u ON u.id = b.user_id
+                 WHERE 1 = 1`;
+    const params = [];
+
+    if (status) {
+      query += ' AND b.status = ?';
+      params.push(status);
+    }
+    if (propertyType) {
+      query += ' AND b.property_type = ?';
+      params.push(propertyType);
+    }
+    if (from) {
+      query += ' AND date(b.created_at) >= date(?)';
+      params.push(from);
+    }
+    if (to) {
+      query += ' AND date(b.created_at) <= date(?)';
+      params.push(to);
+    }
+
+    query += ' ORDER BY b.created_at DESC';
+
+    const bookings = db.prepare(query).all(...params);
+    return res.json(bookings);
+  } catch (err) {
+    console.error('Admin list bookings error', err);
+    return res.status(500).json({ message: 'Internal server error' });
+  }
+}
+
+async function updateBookingStatus(req, res) {
+  try {
+    const id = Number(req.params.id);
+    const { status } = req.body;
+    if (!status) {
+      return res.status(400).json({ message: 'Status is required' });
+    }
+    const validStatuses = ['pending', 'confirmed', 'cancelled', 'completed'];
+    if (!validStatuses.includes(status)) {
+      return res.status(400).json({ message: 'Invalid status' });
+    }
+    const db = getDb();
+    const existing = db.prepare('SELECT * FROM bookings WHERE id = ?').get(id);
+    if (!existing) {
+      return res.status(404).json({ message: 'Booking not found' });
+    }
+    db.prepare('UPDATE bookings SET status = ? WHERE id = ?').run(status, id);
+    const booking = db.prepare('SELECT * FROM bookings WHERE id = ?').get(id);
+    return res.json(booking);
+  } catch (err) {
+    console.error('Admin update booking status error', err);
+    return res.status(500).json({ message: 'Internal server error' });
+  }
+}
+
+async function listPriceSettings(req, res) {
+  try {
+    const db = getDb();
+    const settings = db.prepare('SELECT * FROM price_settings').all();
+    return res.json(settings);
+  } catch (err) {
+    console.error('Admin list price settings error', err);
+    return res.status(500).json({ message: 'Internal server error' });
+  }
+}
+
+async function createPriceSetting(req, res) {
+  try {
+    const { propertyType, propertyId, season, pricePerNight, weekendSurcharge, taxPercent } =
+      req.body;
+    if (!propertyType || !propertyId || !pricePerNight) {
+      return res.status(400).json({
+        message: 'propertyType, propertyId and pricePerNight are required'
+      });
+    }
+    const db = getDb();
+    const stmt = db.prepare(
+      `INSERT INTO price_settings (
+        property_type, property_id, season, price_per_night, weekend_surcharge, tax_percent
+      ) VALUES (?, ?, ?, ?, ?, ?)`
+    );
+    const info = stmt.run(
+      propertyType,
+      propertyId,
+      season || 'all',
+      pricePerNight,
+      weekendSurcharge || 0,
+      taxPercent != null ? taxPercent : Number(process.env.TAX_PERCENT || 18)
+    );
+    const setting = db.prepare('SELECT * FROM price_settings WHERE id = ?').get(info.lastInsertRowid);
+    return res.status(201).json(setting);
+  } catch (err) {
+    console.error('Admin create price setting error', err);
+    return res.status(500).json({ message: 'Internal server error' });
+  }
+}
+
+async function updatePriceSetting(req, res) {
+  try {
+    const id = Number(req.params.id);
+    const { season, pricePerNight, weekendSurcharge, taxPercent } = req.body;
+    const db = getDb();
+    const existing = db.prepare('SELECT * FROM price_settings WHERE id = ?').get(id);
+    if (!existing) {
+      return res.status(404).json({ message: 'Price setting not found' });
+    }
+    db.prepare(
+      `UPDATE price_settings SET 
+        season = ?, price_per_night = ?, weekend_surcharge = ?, tax_percent = ?, updated_at = CURRENT_TIMESTAMP
+       WHERE id = ?`
+    ).run(
+      season || existing.season,
+      pricePerNight != null ? pricePerNight : existing.price_per_night,
+      weekendSurcharge != null ? weekendSurcharge : existing.weekend_surcharge,
+      taxPercent != null ? taxPercent : existing.tax_percent,
+      id
+    );
+    const setting = db.prepare('SELECT * FROM price_settings WHERE id = ?').get(id);
+    return res.json(setting);
+  } catch (err) {
+    console.error('Admin update price setting error', err);
+    return res.status(500).json({ message: 'Internal server error' });
+  }
+}
+
+async function deletePriceSetting(req, res) {
+  try {
+    const id = Number(req.params.id);
+    const db = getDb();
+    const existing = db.prepare('SELECT * FROM price_settings WHERE id = ?').get(id);
+    if (!existing) {
+      return res.status(404).json({ message: 'Price setting not found' });
+    }
+    db.prepare('DELETE FROM price_settings WHERE id = ?').run(id);
+    return res.json({ success: true });
+  } catch (err) {
+    console.error('Admin delete price setting error', err);
+    return res.status(500).json({ message: 'Internal server error' });
+  }
+}
+
+async function listEnquiries(req, res) {
+  try {
+    const { status } = req.query;
+    const db = getDb();
+    let query = 'SELECT * FROM enquiries WHERE 1 = 1';
+    const params = [];
+    if (status) {
+      query += ' AND status = ?';
+      params.push(status);
+    }
+    query += ' ORDER BY created_at DESC';
+    const enquiries = db.prepare(query).all(...params);
+    return res.json(enquiries);
+  } catch (err) {
+    console.error('Admin list enquiries error', err);
+    return res.status(500).json({ message: 'Internal server error' });
+  }
+}
+
+async function updateEnquiryStatus(req, res) {
+  try {
+    const id = Number(req.params.id);
+    const { status } = req.body;
+    if (!status) {
+      return res.status(400).json({ message: 'Status is required' });
+    }
+    const validStatuses = ['new', 'read', 'replied'];
+    if (!validStatuses.includes(status)) {
+      return res.status(400).json({ message: 'Invalid status' });
+    }
+    const db = getDb();
+    const existing = db.prepare('SELECT * FROM enquiries WHERE id = ?').get(id);
+    if (!existing) {
+      return res.status(404).json({ message: 'Enquiry not found' });
+    }
+    db.prepare('UPDATE enquiries SET status = ? WHERE id = ?').run(status, id);
+    const enquiry = db.prepare('SELECT * FROM enquiries WHERE id = ?').get(id);
+    return res.json(enquiry);
+  } catch (err) {
+    console.error('Admin update enquiry status error', err);
+    return res.status(500).json({ message: 'Internal server error' });
+  }
+}
+
+async function deleteEnquiry(req, res) {
+  try {
+    const id = Number(req.params.id);
+    const db = getDb();
+    const existing = db.prepare('SELECT * FROM enquiries WHERE id = ?').get(id);
+    if (!existing) {
+      return res.status(404).json({ message: 'Enquiry not found' });
+    }
+    db.prepare('DELETE FROM enquiries WHERE id = ?').run(id);
+    return res.json({ success: true });
+  } catch (err) {
+    console.error('Admin delete enquiry error', err);
+    return res.status(500).json({ message: 'Internal server error' });
+  }
+}
+
+module.exports = {
+  getDashboard,
+  listRooms,
+  createRoom,
+  updateRoom,
+  deleteRoom,
+  uploadRoomImages,
+  deleteRoomImage,
+  setPrimaryRoomImage,
+  listTents,
+  createTent,
+  updateTent,
+  deleteTent,
+  uploadTentImages,
+  deleteTentImage,
+  listAdminBookings,
+  updateBookingStatus,
+  listPriceSettings,
+  createPriceSetting,
+  updatePriceSetting,
+  deletePriceSetting,
+  listEnquiries,
+  updateEnquiryStatus,
+  deleteEnquiry
+};
+

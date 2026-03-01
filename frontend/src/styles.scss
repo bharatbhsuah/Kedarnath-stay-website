@@ -1,0 +1,59 @@
+@import url('https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700&family=Playfair+Display:wght@500;600;700&display=swap');
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+body {
+  @apply bg-cream text-dark font-body antialiased;
+}
+
+button:not(.no-style) {
+  @apply rounded-button uppercase tracking-widest font-medium transition-all duration-200;
+}
+
+.btn-primary {
+  @apply bg-forest text-cream hover:bg-forest-light active:bg-forest-dark px-5 py-2.5 rounded-button shadow-soft;
+}
+
+.btn-gold {
+  @apply bg-gold text-dark hover:bg-gold-light active:bg-earth px-5 py-2.5 rounded-button shadow-soft;
+}
+
+.card {
+  @apply border border-sand/60 bg-white rounded-card shadow-card hover:shadow-card-hover hover:-translate-y-0.5 transition-all duration-300;
+}
+
+input,
+select,
+textarea {
+  @apply border border-sand bg-white/80 focus:border-forest focus:ring-2 focus:ring-forest/20 outline-none rounded-button px-3 py-2.5 text-dark transition-colors;
+}
+
+.admin-sidebar {
+  @apply bg-dark text-cream min-h-screen;
+}
+
+.admin-sidebar a {
+  @apply block px-4 py-3 text-sm transition-colors hover:bg-white/10;
+}
+
+.admin-sidebar a.active {
+  @apply bg-forest;
+}
+
+.badge-confirmed {
+  @apply bg-emerald-100 text-emerald-800 px-2.5 py-1 text-xs font-medium uppercase rounded-md;
+}
+
+.badge-pending {
+  @apply bg-amber-100 text-amber-800 px-2.5 py-1 text-xs font-medium uppercase rounded-md;
+}
+
+.badge-cancelled {
+  @apply bg-red-100 text-red-800 px-2.5 py-1 text-xs font-medium uppercase rounded-md;
+}
+
+.badge-paid {
+  @apply bg-emerald-100 text-emerald-800 px-2.5 py-1 text-xs font-medium uppercase rounded-md;
+}
+
