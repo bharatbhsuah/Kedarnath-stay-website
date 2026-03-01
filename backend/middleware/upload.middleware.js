@@ -34,16 +34,22 @@ function fileFilter(req, file, cb) {
   cb(null, true);
 }
 
+const MAX_FILE_SIZE = 5 * 1024 * 1024; // 5MB
+const MAX_IMAGES_PER_PROPERTY = 4;
+
 const upload = multer({
   storage,
   fileFilter,
   limits: {
-    fileSize: 5 * 1024 * 1024,
-    files: 10
+    fileSize: MAX_FILE_SIZE,
+    files: MAX_IMAGES_PER_PROPERTY
   }
 });
 
 module.exports = {
-  upload
+  upload,
+  MAX_IMAGES_PER_PROPERTY,
+  MAX_FILE_SIZE_MB: 5
 };
+
 

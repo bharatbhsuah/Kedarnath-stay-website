@@ -7,6 +7,14 @@ body {
   @apply bg-cream text-dark font-body antialiased;
 }
 
+.site-banner {
+  background-image: url('assets/image/background.jpeg');
+  background-size: cover;
+  background-repeat: no-repeat;
+  background-position: center;
+  min-height: 720px;
+}
+
 button:not(.no-style) {
   @apply rounded-button uppercase tracking-widest font-medium transition-all duration-200;
 }

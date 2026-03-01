@@ -9,7 +9,11 @@ const { runMigrations } = require('./db/migrations');
 const app = express();
 
 app.use(cors());
-app.use(helmet());
+app.use(
+  helmet({
+    crossOriginResourcePolicy: { policy: 'cross-origin' }
+  })
+);
 app.use(express.json());
 
 const uploadDir = process.env.UPLOAD_DIR || './uploads';

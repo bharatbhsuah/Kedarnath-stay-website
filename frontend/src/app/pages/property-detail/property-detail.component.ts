@@ -16,21 +16,44 @@ type PropertyType = 'room' | 'tent';
       <div class="grid lg:grid-cols-[1.5fr,400px] gap-8 lg:gap-10">
         <div class="min-w-0">
           <div class="mb-6 rounded-card overflow-hidden">
-            <div class="h-56 sm:h-72 lg:h-80 bg-sand overflow-hidden">
+            <div class="relative h-56 sm:h-72 lg:h-80 bg-sand overflow-hidden group">
               <img
-                *ngIf="primaryImage"
-                [src]="primaryImage"
+                *ngIf="allImages.length"
+                [src]="allImages[currentImageIndex]"
                 [alt]="property.name"
-                class="w-full h-full object-cover"
+                class="absolute inset-0 w-full h-full object-cover transition-opacity duration-300"
               />
-            </div>
-            <div *ngIf="galleryImages.length" class="grid grid-cols-2 sm:grid-cols-4 gap-2 mt-2">
-              <div
-                *ngFor="let img of galleryImages"
-                class="h-20 sm:h-24 bg-sand overflow-hidden cursor-pointer rounded-button border-2 border-transparent hover:border-forest/30 transition-colors"
-                (click)="setPrimary(img)"
-              >
-                <img [src]="img" [alt]="property.name" class="w-full h-full object-cover" />
+              <div *ngIf="allImages.length > 1" class="absolute inset-0 flex items-center justify-between px-2 pointer-events-none group-hover:pointer-events-auto">
+                <button
+                  type="button"
+                  class="flex-shrink-0 w-10 h-10 rounded-full bg-black/40 hover:bg-black/60 text-white flex items-center justify-center transition-all"
+                  (click)="prevImage(); $event.stopPropagation()"
+                  aria-label="Previous image"
+                >
+                  <svg class="w-5 h-5" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M12.707 5.293a1 1 0 010 1.414L9.414 10l3.293 3.293a1 1 0 01-1.414 1.414l-4-4a1 1 0 010-1.414l4-4a1 1 0 011.414 0z" clip-rule="evenodd"/></svg>
+                </button>
+                <button
+                  type="button"
+                  class="flex-shrink-0 w-10 h-10 rounded-full bg-black/40 hover:bg-black/60 text-white flex items-center justify-center transition-all"
+                  (click)="nextImage(); $event.stopPropagation()"
+                  aria-label="Next image"
+                >
+                  <svg class="w-5 h-5" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clip-rule="evenodd"/></svg>
+                </button>
+              </div>
+              <div *ngIf="allImages.length > 1" class="absolute bottom-2 left-1/2 -translate-x-1/2 flex gap-2">
+            <button
+  *ngFor="let img of allImages; let i = index"
+  type="button"
+  class="w-2 h-2 rounded-full transition-colors"
+  [ngClass]="{
+    'bg-white': i === currentImageIndex,
+    'bg-white/50': i !== currentImageIndex,
+    'ring-2 ring-white/50': i === currentImageIndex
+  }"
+  (click)="goToImage(i); $event.stopPropagation()"
+  [attr.aria-label]="'Image ' + (i + 1)"
+></button>
               </div>
             </div>
           </div>
@@ -115,8 +138,8 @@ export class PropertyDetailComponent {
   loading = false;
   submitted = false;
   error = '';
-  primaryImage: string | null = null;
-  galleryImages: string[] = [];
+  allImages: string[] = [];
+  currentImageIndex = 0;
 
   bookingForm = this.fb.group({
     checkIn: ['', Validators.required],
@@ -152,9 +175,9 @@ export class PropertyDetailComponent {
     obs.subscribe({
       next: (prop) => {
         this.property = prop;
-        const urls = (prop.images || []).map((i) => i.url);
-        this.primaryImage = urls[0] || null;
-        this.galleryImages = urls.slice(1);
+        this.allImages = (prop.images || []).map((i) => i.url);
+        this.currentImageIndex = Math.max(0, (prop.images || []).findIndex((i) => i.isPrimary));
+        if (this.currentImageIndex < 0) this.currentImageIndex = 0;
         this.loading = false;
       },
       error: () => {
@@ -163,8 +186,18 @@ export class PropertyDetailComponent {
     });
   }
 
-  setPrimary(url: string): void {
-    this.primaryImage = url;
+  prevImage(): void {
+    if (this.allImages.length <= 1) return;
+    this.currentImageIndex = (this.currentImageIndex - 1 + this.allImages.length) % this.allImages.length;
+  }
+
+  nextImage(): void {
+    if (this.allImages.length <= 1) return;
+    this.currentImageIndex = (this.currentImageIndex + 1) % this.allImages.length;
+  }
+
+  goToImage(index: number): void {
+    this.currentImageIndex = index;
   }
 
   goToBooking(): void {

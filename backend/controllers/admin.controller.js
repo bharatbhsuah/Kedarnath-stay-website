@@ -1,4 +1,7 @@
+const path = require('path');
+const fs = require('fs');
 const { getDb } = require('../db/database');
+const { MAX_IMAGES_PER_PROPERTY } = require('../middleware/upload.middleware');
 require('dotenv').config();
 
 function getTodayDateString() {
@@ -169,6 +172,15 @@ async function uploadRoomImages(req, res) {
       return res.status(400).json({ message: 'No images uploaded' });
     }
 
+    const currentCount = db.prepare('SELECT COUNT(*) as c FROM room_images WHERE room_id = ?').get(roomId).c;
+    const slotsLeft = MAX_IMAGES_PER_PROPERTY - currentCount;
+    if (slotsLeft <= 0) {
+      return res.status(400).json({
+        message: `Maximum ${MAX_IMAGES_PER_PROPERTY} images per room. Remove an image to add more.`
+      });
+    }
+    const filesToAdd = req.files.slice(0, slotsLeft);
+
     const insert = db.prepare(
       'INSERT INTO room_images (room_id, image_path, is_primary) VALUES (?, ?, ?)'
     );
@@ -177,7 +189,7 @@ async function uploadRoomImages(req, res) {
       .get(roomId);
 
     const images = [];
-    req.files.forEach((file, index) => {
+    filesToAdd.forEach((file, index) => {
       const isPrimary = !existingPrimary && index === 0 ? 1 : 0;
       const info = insert.run(roomId, file.path, isPrimary);
       images.push({
@@ -195,6 +207,12 @@ async function uploadRoomImages(req, res) {
   }
 }
 
+function resolveImagePath(imagePath) {
+  if (!imagePath) return null;
+  const normalized = path.normalize(imagePath);
+  return path.isAbsolute(normalized) ? normalized : path.resolve(process.cwd(), normalized);
+}
+
 async function deleteRoomImage(req, res) {
   try {
     const roomId = Number(req.params.id);
@@ -205,6 +223,14 @@ async function deleteRoomImage(req, res) {
       .get(imageId, roomId);
     if (!existing) {
       return res.status(404).json({ message: 'Image not found' });
+    }
+    const filePath = resolveImagePath(existing.image_path);
+    if (filePath && fs.existsSync(filePath)) {
+      try {
+        fs.unlinkSync(filePath);
+      } catch (unlinkErr) {
+        console.warn('Could not delete image file:', filePath, unlinkErr.message);
+      }
     }
     db.prepare('DELETE FROM room_images WHERE id = ?').run(imageId);
     return res.json({ success: true });
@@ -337,6 +363,15 @@ async function uploadTentImages(req, res) {
       return res.status(400).json({ message: 'No images uploaded' });
     }
 
+    const currentCount = db.prepare('SELECT COUNT(*) as c FROM tent_images WHERE tent_id = ?').get(tentId).c;
+    const slotsLeft = MAX_IMAGES_PER_PROPERTY - currentCount;
+    if (slotsLeft <= 0) {
+      return res.status(400).json({
+        message: `Maximum ${MAX_IMAGES_PER_PROPERTY} images per tent. Remove an image to add more.`
+      });
+    }
+    const filesToAdd = req.files.slice(0, slotsLeft);
+
     const insert = db.prepare(
       'INSERT INTO tent_images (tent_id, image_path, is_primary) VALUES (?, ?, ?)'
     );
@@ -345,7 +380,7 @@ async function uploadTentImages(req, res) {
       .get(tentId);
 
     const images = [];
-    req.files.forEach((file, index) => {
+    filesToAdd.forEach((file, index) => {
       const isPrimary = !existingPrimary && index === 0 ? 1 : 0;
       const info = insert.run(tentId, file.path, isPrimary);
       images.push({
@@ -374,10 +409,38 @@ async function deleteTentImage(req, res) {
     if (!existing) {
       return res.status(404).json({ message: 'Image not found' });
     }
+    const filePath = resolveImagePath(existing.image_path);
+    if (filePath && fs.existsSync(filePath)) {
+      try {
+        fs.unlinkSync(filePath);
+      } catch (unlinkErr) {
+        console.warn('Could not delete image file:', filePath, unlinkErr.message);
+      }
+    }
     db.prepare('DELETE FROM tent_images WHERE id = ?').run(imageId);
     return res.json({ success: true });
   } catch (err) {
     console.error('Admin delete tent image error', err);
+    return res.status(500).json({ message: 'Internal server error' });
+  }
+}
+
+async function setPrimaryTentImage(req, res) {
+  try {
+    const tentId = Number(req.params.id);
+    const imageId = Number(req.params.imageId);
+    const db = getDb();
+    const existing = db
+      .prepare('SELECT * FROM tent_images WHERE id = ? AND tent_id = ?')
+      .get(imageId, tentId);
+    if (!existing) {
+      return res.status(404).json({ message: 'Image not found' });
+    }
+    db.prepare('UPDATE tent_images SET is_primary = 0 WHERE tent_id = ?').run(tentId);
+    db.prepare('UPDATE tent_images SET is_primary = 1 WHERE id = ?').run(imageId);
+    return res.json({ success: true });
+  } catch (err) {
+    console.error('Admin set primary tent image error', err);
     return res.status(500).json({ message: 'Internal server error' });
   }
 }
@@ -605,6 +668,7 @@ module.exports = {
   deleteTent,
   uploadTentImages,
   deleteTentImage,
+  setPrimaryTentImage,
   listAdminBookings,
   updateBookingStatus,
   listPriceSettings,

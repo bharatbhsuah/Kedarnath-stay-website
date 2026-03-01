@@ -12,12 +12,15 @@
 
 
 import { Component } from '@angular/core';
+import { NavigationEnd, Router } from '@angular/router';
+import { filter } from 'rxjs/operators';
 @Component({
   selector: 'app-root',
 
   template: `
     <div class="min-h-screen flex flex-col">
       <app-navbar></app-navbar>
+      <div *ngIf="!isAdmin" class="site-banner"></div>
       <main class="flex-1">
         <router-outlet></router-outlet>
       </main>
@@ -25,5 +28,15 @@ import { Component } from '@angular/core';
     </div>
   `
 })
-export class AppComponent {}
+export class AppComponent {
+  isAdmin = false;
+
+  constructor(private router: Router) {
+    this.router.events
+      .pipe(filter((event): event is NavigationEnd => event instanceof NavigationEnd))
+      .subscribe((event) => {
+        this.isAdmin = event.urlAfterRedirects.startsWith('/admin');
+      });
+  }
+}
 

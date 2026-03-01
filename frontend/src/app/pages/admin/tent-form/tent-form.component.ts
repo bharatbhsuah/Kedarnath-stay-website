@@ -4,7 +4,11 @@ import { NgIf } from '@angular/common';
 import { ReactiveFormsModule, FormBuilder, Validators, FormArray } from '@angular/forms';
 import { HttpClient } from '@angular/common/http';
 import { LoadingSpinnerComponent } from '../../../shared/components/loading-spinner/loading-spinner.component';
+import { TentService } from '../../../core/services/tent.service';
+import { PropertyImage } from '../../../core/services/room.service';
 import { environment } from '../../../../environments/environment';
+
+const MAX_IMAGES = 4;
 
 interface AdminTent {
   id: number;
@@ -77,6 +81,27 @@ interface AdminTent {
             <option value="inactive">Inactive</option>
           </select>
         </div>
+        <div *ngIf="isEdit && id" class="border-t border-sand/60 pt-4 mt-4">
+          <label class="block text-xs uppercase mb-1 tracking-widest">Images</label>
+          <p class="text-xs text-muted mb-2">Max {{ MAX_IMAGES }} images. JPEG, PNG or WEBP, 5MB each.</p>
+          <div class="flex flex-wrap gap-3 mb-3">
+            <div *ngFor="let img of tentImages" class="relative group">
+              <img [src]="img.url" alt="Tent" class="w-24 h-24 object-cover rounded-button border border-sand/60" />
+              <div class="absolute inset-0 flex flex-col justify-center items-center gap-1 rounded-button bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity">
+                <button type="button" class="btn-primary text-xs py-1" (click)="setPrimary(img.id)" *ngIf="!img.isPrimary">Set primary</button>
+                <button type="button" class="text-xs py-1 px-2 bg-red-600 text-white rounded hover:bg-red-700" (click)="deleteImage(img.id)">Remove</button>
+              </div>
+              <span *ngIf="img.isPrimary" class="absolute top-1 left-1 text-xs bg-forest text-white px-1.5 py-0.5 rounded">Primary</span>
+            </div>
+          </div>
+          <div *ngIf="tentImages.length < MAX_IMAGES" class="flex items-center gap-2">
+            <input type="file" #fileInput accept="image/jpeg,image/png,image/webp" multiple (change)="onFileSelect($event)" class="text-sm" />
+            <button type="button" class="btn-gold text-xs" (click)="uploadImages()" [disabled]="uploadingImages || !selectedFiles.length">
+              Upload
+            </button>
+          </div>
+          <p class="text-xs text-red-600 mt-1" *ngIf="imageError">{{ imageError }}</p>
+        </div>
         <button class="btn-primary mt-2" type="submit" [disabled]="loading">
           {{ isEdit ? 'Update Tent' : 'Create Tent' }}
         </button>
@@ -87,6 +112,7 @@ interface AdminTent {
   `
 })
 export class TentFormComponent {
+  readonly MAX_IMAGES = MAX_IMAGES;
   form = this.fb.group({
     name: ['', Validators.required],
     type: ['standard', Validators.required],
@@ -100,13 +126,18 @@ export class TentFormComponent {
   loading = false;
   error = '';
   isEdit = false;
-  private id: number | null = null;
+  public id: number | null = null;
+  tentImages: PropertyImage[] = [];
+  imageError = '';
+  uploadingImages = false;
+  selectedFiles: File[] = [];
 
   constructor(
     private fb: FormBuilder,
     private route: ActivatedRoute,
     private http: HttpClient,
-    private router: Router
+    private router: Router,
+    private tentService: TentService
   ) {
     this.route.paramMap.subscribe((params) => {
       const idParam = params.get('id');
@@ -138,31 +169,82 @@ export class TentFormComponent {
       return;
     }
     this.loading = true;
-    this.http.get<AdminTent[]>(`${environment.apiUrl}/admin/tents`).subscribe({
-      next: (tents) => {
-        const tent = tents.find((t) => t.id === this.id);
-        if (tent) {
-          const amenitiesArray =
-            typeof tent.amenities === 'string'
-              ? JSON.parse(tent.amenities)
-              : tent.amenities || [];
-          amenitiesArray.forEach((a: string) => this.amenities.push(this.fb.control(a)));
-          if (!amenitiesArray.length) {
-            this.addAmenity();
-          }
-          this.form.patchValue({
-            name: tent.name,
-            type: tent.type,
-            description: tent.description || '',
-            capacity: tent.capacity,
-            basePrice: tent.basePrice,
-            status: tent.status
-          });
+    this.tentService.getTent(this.id).subscribe({
+      next: (tent) => {
+        const amenitiesArray = tent.amenities || [];
+        amenitiesArray.forEach((a: string) => this.amenities.push(this.fb.control(a)));
+        if (!amenitiesArray.length) {
+          this.addAmenity();
         }
+        this.form.patchValue({
+          name: tent.name,
+          type: tent.type,
+          description: tent.description || '',
+          capacity: tent.capacity,
+          basePrice: tent.basePrice,
+          status: tent.status
+        });
+        this.tentImages = tent.images || [];
         this.loading = false;
       },
       error: () => {
         this.loading = false;
+      }
+    });
+  }
+
+  onFileSelect(event: Event): void {
+    const input = event.target as HTMLInputElement;
+    const files = input.files;
+    if (!files?.length) return;
+    this.imageError = '';
+    this.selectedFiles = Array.from(files).slice(0, MAX_IMAGES - this.tentImages.length);
+    if (files.length > this.selectedFiles.length) {
+      this.imageError = `Only ${MAX_IMAGES - this.tentImages.length} slot(s) left. Some files were not selected.`;
+    }
+  }
+
+  uploadImages(): void {
+    if (!this.id || !this.selectedFiles.length) return;
+    this.imageError = '';
+    this.uploadingImages = true;
+    const formData = new FormData();
+    this.selectedFiles.forEach((f) => formData.append('images', f));
+    this.http.post<{ id: number; image_path: string; is_primary: number }[]>(`${environment.apiUrl}/admin/tents/${this.id}/images`, formData).subscribe({
+      next: () => {
+        this.selectedFiles = [];
+        this.tentService.getTent(this.id!).subscribe((t) => (this.tentImages = t.images || []));
+        this.uploadingImages = false;
+      },
+      error: (err) => {
+        this.imageError = err?.error?.message || 'Upload failed.';
+        this.uploadingImages = false;
+      }
+    });
+  }
+
+  deleteImage(imageId: number): void {
+    if (!this.id) return;
+    this.imageError = '';
+    this.http.delete(`${environment.apiUrl}/admin/tents/${this.id}/images/${imageId}`).subscribe({
+      next: () => {
+        this.tentService.getTent(this.id!).subscribe((t) => (this.tentImages = t.images || []));
+      },
+      error: (err) => {
+        this.imageError = err?.error?.message || 'Delete failed.';
+      }
+    });
+  }
+
+  setPrimary(imageId: number): void {
+    if (!this.id) return;
+    this.imageError = '';
+    this.http.put(`${environment.apiUrl}/admin/tents/${this.id}/images/${imageId}/primary`, {}).subscribe({
+      next: () => {
+        this.tentService.getTent(this.id!).subscribe((t) => (this.tentImages = t.images || []));
+      },
+      error: (err) => {
+        this.imageError = err?.error?.message || 'Set primary failed.';
       }
     });
   }
