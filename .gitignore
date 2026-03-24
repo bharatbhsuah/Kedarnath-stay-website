@@ -50,7 +50,7 @@ frontend/coverage/
 .karma/
 
 # User uploads (backend)
-backend/uploads/*
+
 
 # Database (uncomment if using local SQLite dev DB)
 # backend/*.sqlite
