@@ -177,7 +177,9 @@ async function me(req, res) {
       name: user.name,
       phone: user.phone,
       email: user.email && user.email.endsWith('@auto.local') ? null : user.email,
-      role: user.role
+      role: user.role,
+      hotel_id: user.hotel_id || null,
+      hotel_name: user.hotel_name || null
     });
   } catch (err) {
     console.error('Me error', err);

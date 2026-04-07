@@ -17,11 +17,11 @@ import { AuthService } from '../../../core/services/auth.service';
           <a routerLink="/admin/tents" routerLinkActive="active">Tents</a>
           <a *ngIf="isSuperAdmin" routerLink="/admin/promo-codes" routerLinkActive="active">Promo Codes</a>
           <a *ngIf="isSuperAdmin" routerLink="/admin/price-settings" routerLinkActive="active">Price Settings</a>
-          <a *ngIf="isSuperAdmin" routerLink="/admin/bookings" routerLinkActive="active">Bookings</a>
+          <a routerLink="/admin/bookings" routerLinkActive="active">Bookings</a>
           <a *ngIf="isSuperAdmin" routerLink="/admin/enquiries" routerLinkActive="active">Enquiries</a>
         </nav>
       </aside>
-      <main class="flex-1 bg-cream min-w-0">
+      <main class="admin-shell flex-1 min-w-0">
         <div class="max-w-6xl mx-auto px-4 sm:px-6 py-6 sm:py-8">
           <router-outlet></router-outlet>
         </div>

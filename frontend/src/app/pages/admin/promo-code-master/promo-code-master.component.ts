@@ -136,7 +136,7 @@ interface Agent {
       <app-loading-spinner [show]="loading"></app-loading-spinner>
 
       <!-- Promo Codes List -->
-      <div *ngIf="!loading" class="bg-white rounded-lg border border-sand">
+      <div *ngIf="!loading" class="card p-3 sm:p-4">
         <div class="p-4 border-b border-sand">
           <h2 class="font-semibold">All Promo Codes</h2>
         </div>
@@ -146,43 +146,43 @@ interface Agent {
         </div>
         
         <div class="overflow-x-auto">
-          <table class="w-full">
-            <thead class="bg-sand">
+          <table>
+            <thead>
               <tr>
-                <th class="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider">Code</th>
-                <th class="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider">Agent</th>
-                <th class="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider">Discount</th>
-                <th class="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider">Usage</th>
-                <th class="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider">Valid Until</th>
-                <th class="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider">Status</th>
-                <th class="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider">Actions</th>
+                <th>Code</th>
+                <th>Agent</th>
+                <th>Discount</th>
+                <th>Usage</th>
+                <th>Valid Until</th>
+                <th>Status</th>
+                <th>Actions</th>
               </tr>
             </thead>
-            <tbody class="divide-y divide-sand">
+            <tbody>
               <tr *ngFor="let promo of promoCodes">
-                <td class="px-4 py-3 font-mono text-sm">{{ promo.code }}</td>
-                <td class="px-4 py-3 text-sm">
+                <td><span class="admin-ref">{{ promo.code }}</span></td>
+                <td>
                   <div>{{ promo.agent_name }}</div>
                   <div class="text-xs text-muted">{{ promo.agent_email }}</div>
                 </td>
-                <td class="px-4 py-3 text-sm">{{ promo.discount_percent }}%</td>
-                <td class="px-4 py-3 text-sm">
+                <td>{{ promo.discount_percent }}%</td>
+                <td>
                   {{ promo.used_count }}{{ promo.max_uses > 0 ? '/' + promo.max_uses : '' }}
                 </td>
-                <td class="px-4 py-3 text-sm">
+                <td>
                   {{ promo.valid_until ? (promo.valid_until | date:'mediumDate') : 'No expiry' }}
                 </td>
-                <td class="px-4 py-3">
-                  <span [class]="'px-2 py-1 text-xs rounded-full ' + (promo.status === 'active' ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-800')">
+                <td>
+                  <span class="status-pill" [ngClass]="promo.status === 'active' ? 'confirmed' : 'cancelled'">
                     {{ promo.status }}
                   </span>
                 </td>
-                <td class="px-4 py-3">
-                  <div class="flex gap-2">
-                    <button (click)="editPromoCode(promo)" class="btn-primary text-xs">
+                <td>
+                  <div class="admin-actions">
+                    <button (click)="editPromoCode(promo)" class="btn-secondary text-xs">
                       Edit
                     </button>
-                    <button (click)="deletePromoCode(promo)" class="btn-primary text-xs bg-red-500 hover:bg-red-600">
+                    <button (click)="deletePromoCode(promo)" class="btn-danger text-xs">
                       Delete
                     </button>
                   </div>

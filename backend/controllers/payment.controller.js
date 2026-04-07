@@ -1,6 +1,4 @@
-const crypto = require('crypto');
 const { getDb } = require('../db/database');
-const { createOrder } = require('../utils/razorpay');
 const { normalizePhone, isValidPhone } = require('./guest.controller');
 require('dotenv').config();
 
@@ -52,6 +50,24 @@ function recalculateBookingAmounts(db, booking) {
   };
 }
 
+function getHotelNameForBooking(db, booking) {
+  if (!booking || !['room', 'tent'].includes(booking.property_type)) {
+    return '';
+  }
+  const table = booking.property_type === 'room' ? 'rooms' : 'tents';
+  const property = db.prepare(`SELECT name, hotel_id FROM ${table} WHERE id = ?`).get(booking.property_id);
+  if (!property) {
+    return '';
+  }
+  if (property.hotel_id) {
+    const hotel = db.prepare('SELECT name FROM hotels WHERE id = ?').get(property.hotel_id);
+    if (hotel?.name) {
+      return String(hotel.name).trim();
+    }
+  }
+  return String(property.name || '').trim();
+}
+
 async function createPaymentOrder(req, res) {
   try {
     const { bookingId, phone } = req.body;
@@ -70,6 +86,9 @@ async function createPaymentOrder(req, res) {
     }
     if (booking.payment_status === 'paid') {
       return res.status(400).json({ message: 'Booking already paid' });
+    }
+    if (booking.payment_status === 'pending_verification') {
+      return res.status(400).json({ message: 'Payment verification is already pending for this booking' });
     }
 
     const recalculated = recalculateBookingAmounts(db, booking);
@@ -105,24 +124,71 @@ async function createPaymentOrder(req, res) {
       return res.status(400).json({ message: 'Invalid registration amount for this booking' });
     }
 
-    const order = await createOrder(registrationAmount, booking.booking_ref);
+    const paytmUpiId = String(process.env.PAYTM_UPI_ID || '').trim();
+    const paytmUpiName = String(process.env.PAYTM_UPI_NAME || '').trim();
+    const phonepeUpiId = String(process.env.PHONEPE_UPI_ID || '').trim();
+    const phonepeUpiName = String(process.env.PHONEPE_UPI_NAME || '').trim();
 
-    const existingPayment = db
-      .prepare('SELECT * FROM payments WHERE booking_id = ? AND razorpay_order_id = ?')
-      .get(bookingId, order.id);
+    if (!paytmUpiId || !paytmUpiName || !phonepeUpiId || !phonepeUpiName) {
+      return res.status(500).json({
+        message:
+          'UPI payment config missing. Set PAYTM_UPI_ID, PAYTM_UPI_NAME, PHONEPE_UPI_ID and PHONEPE_UPI_NAME.'
+      });
+    }
 
+    const amountText = registrationAmount.toFixed(2);
+    const hotelName = getHotelNameForBooking(db, booking);
+    const transactionNote = hotelName
+      ? `${hotelName} - Booking ${booking.booking_ref}`
+      : `Booking ${booking.booking_ref}`;
+
+    const upiBase = (upiId, upiName) =>
+      `upi://pay?pa=${encodeURIComponent(upiId)}&pn=${encodeURIComponent(
+        upiName
+      )}&am=${encodeURIComponent(amountText)}&cu=INR&tn=${encodeURIComponent(transactionNote)}`;
+
+    const paytmUpiUri = upiBase(paytmUpiId, paytmUpiName);
+    const phonepeUpiUri = upiBase(phonepeUpiId, phonepeUpiName);
+    const paytmDeepLink = `paytmmp://pay?pa=${encodeURIComponent(
+      paytmUpiId
+    )}&pn=${encodeURIComponent(paytmUpiName)}&am=${encodeURIComponent(
+      amountText
+    )}&cu=INR&tn=${encodeURIComponent(transactionNote)}`;
+    const phonepeDeepLink = `phonepe://upi/pay?pa=${encodeURIComponent(
+      phonepeUpiId
+    )}&pn=${encodeURIComponent(phonepeUpiName)}&am=${encodeURIComponent(
+      amountText
+    )}&cu=INR&tn=${encodeURIComponent(transactionNote)}`;
+
+    const existingPayment = db.prepare('SELECT * FROM payments WHERE booking_id = ?').get(bookingId);
     if (!existingPayment) {
       db.prepare(
-        `INSERT INTO payments (booking_id, razorpay_order_id, amount, currency, status)
-         VALUES (?, ?, ?, ?, 'pending')`
-      ).run(bookingId, order.id, registrationAmount, order.currency);
+        `INSERT INTO payments (booking_id, amount, currency, status)
+         VALUES (?, ?, ?, 'pending')`
+      ).run(bookingId, registrationAmount, 'INR');
+    } else if (existingPayment.status !== 'success') {
+      db.prepare(
+        `UPDATE payments
+         SET amount = ?, currency = 'INR', status = 'pending'
+         WHERE booking_id = ?`
+      ).run(registrationAmount, bookingId);
     }
 
     return res.json({
-      orderId: order.id,
-      amount: order.amount,
-      currency: order.currency,
-      razorpayKeyId: process.env.RAZORPAY_KEY_ID,
+      amount: registrationAmount,
+      currency: 'INR',
+      upiIds: {
+        paytm: paytmUpiId,
+        phonepe: phonepeUpiId
+      },
+      deepLinks: {
+        paytm: paytmDeepLink,
+        phonepe: phonepeDeepLink
+      },
+      upiLinks: {
+        paytm: paytmUpiUri,
+        phonepe: phonepeUpiUri
+      },
       bookingRef: booking.booking_ref,
       paymentBreakdown: {
         paidNow: registrationAmount,
@@ -132,34 +198,16 @@ async function createPaymentOrder(req, res) {
     });
   } catch (err) {
     console.error('Create payment order error', err);
-    if (err.code === 'RAZORPAY_CONFIG_MISSING') {
-      return res.status(500).json({
-        message: 'Payment gateway is not configured. Set valid RAZORPAY_KEY_ID and RAZORPAY_KEY_SECRET.'
-      });
-    }
-    if (err.statusCode === 401) {
-      return res.status(502).json({
-        message: 'Payment gateway authentication failed. Verify Razorpay API keys on the server.'
-      });
-    }
     return res.status(500).json({ message: 'Internal server error' });
   }
 }
 
 async function verifyPayment(req, res) {
   try {
-    const { razorpayOrderId, razorpayPaymentId, razorpaySignature, bookingId, phone } = req.body;
-    if (!razorpayOrderId || !razorpayPaymentId || !razorpaySignature || !bookingId) {
-      return res.status(400).json({ message: 'Missing Razorpay verification fields' });
+    const { bookingId, phone, transactionId, method } = req.body;
+    if (!bookingId) {
+      return res.status(400).json({ message: 'bookingId is required' });
     }
-
-    const body = `${razorpayOrderId}|${razorpayPaymentId}`;
-    const expectedSignature = crypto
-      .createHmac('sha256', process.env.RAZORPAY_KEY_SECRET)
-      .update(body.toString())
-      .digest('hex');
-
-    const isValid = expectedSignature === razorpaySignature;
     const db = getDb();
     const booking = db.prepare('SELECT * FROM bookings WHERE id = ?').get(bookingId);
     if (!booking) {
@@ -171,26 +219,37 @@ async function verifyPayment(req, res) {
       return res.status(403).json({ message: 'Access denied' });
     }
 
-    if (!isValid) {
-      db.prepare(
-        `UPDATE payments 
-         SET razorpay_payment_id = ?, razorpay_signature = ?, status = 'failed'
-         WHERE booking_id = ? AND razorpay_order_id = ?`
-      ).run(razorpayPaymentId, razorpaySignature, bookingId, razorpayOrderId);
-      return res.status(400).json({ message: 'Invalid payment signature' });
+    if (booking.payment_status === 'paid') {
+      return res.json({ success: true, booking, verificationRequired: false });
+    }
+    if (booking.payment_status === 'pending_verification') {
+      return res.status(400).json({ message: 'Payment verification is already pending for this booking' });
     }
 
     const now = new Date().toISOString();
-
-    db.prepare(
-      `UPDATE payments 
-       SET razorpay_payment_id = ?, razorpay_signature = ?, status = 'success', paid_at = ?
-       WHERE booking_id = ? AND razorpay_order_id = ?`
-    ).run(razorpayPaymentId, razorpaySignature, now, bookingId, razorpayOrderId);
+    const payment = db.prepare('SELECT * FROM payments WHERE booking_id = ?').get(bookingId);
+    if (!payment) {
+      db.prepare(
+        `INSERT INTO payments (booking_id, amount, currency, status, paid_at, razorpay_payment_id, razorpay_signature)
+         VALUES (?, ?, 'INR', 'pending_verification', ?, ?, ?)`
+      ).run(
+        bookingId,
+        Number(booking.registration_amount || booking.total_amount || 0),
+        now,
+        transactionId || `manual_${Date.now()}`,
+        method || 'upi'
+      );
+    } else {
+      db.prepare(
+        `UPDATE payments 
+         SET razorpay_payment_id = ?, razorpay_signature = ?, status = 'pending_verification', paid_at = ?
+         WHERE booking_id = ?`
+      ).run(transactionId || `manual_${Date.now()}`, method || 'upi', now, bookingId);
+    }
 
     db.prepare(
       `UPDATE bookings 
-       SET payment_status = 'paid', status = 'confirmed'
+       SET payment_status = 'pending_verification'
        WHERE id = ?`
     ).run(bookingId);
 
@@ -198,6 +257,8 @@ async function verifyPayment(req, res) {
 
     return res.json({
       success: true,
+      verificationRequired: true,
+      message: 'Payment submitted. Our team will verify and confirm shortly.',
       booking: updatedBooking,
       paymentBreakdown: {
         paidNow: Number(updatedBooking.registration_amount || updatedBooking.total_amount || 0),

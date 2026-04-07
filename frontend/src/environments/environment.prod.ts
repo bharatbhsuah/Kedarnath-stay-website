@@ -1,5 +1,9 @@
 export const environment = {
-  apiUrl: 'http://localhost:3000/api',
-  razorpayKeyId: 'rzp_test_xxxxxxxxxxxx'
+  apiUrl: 'http://192.168.0.104:3000/api',
+  yatraRegistrationUrl: 'https://registrationandtouristcare.uk.gov.in/',
+  helplineNumbers: [
+    { label: 'Tourist Helpline', number: '7906266244' },
+    { label: 'Police/Disaster Helpline', number: '112' },
+    { label: 'Emergency Assistance', number: '108' }
+  ]
 };
-

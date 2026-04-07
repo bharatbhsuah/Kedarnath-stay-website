@@ -1,7 +1,7 @@
 {
   "name": "tent-hotel-backend",
   "version": "1.0.0",
-  "description": "Hotel Room & Tent Booking backend (Express + SQLite + Razorpay + PDFKit)",
+  "description": "Hotel Room & Tent Booking backend (Express + SQLite + UPI Deep Links + PDFKit)",
   "main": "server.js",
   "scripts": {
     "start": "node server.js",
@@ -10,7 +10,7 @@
   "keywords": [
     "express",
     "sqlite",
-    "razorpay",
+    "upi",
     "pdfkit",
     "hotel-booking",
     "tents",
@@ -27,8 +27,7 @@
     "helmet": "^7.1.0",
     "jsonwebtoken": "^9.0.2",
     "multer": "^1.4.5-lts.1",
-    "pdfkit": "^0.15.0",
-    "razorpay": "^2.9.5"
+    "pdfkit": "^0.15.0"
   },
   "devDependencies": {
     "nodemon": "^3.1.0"

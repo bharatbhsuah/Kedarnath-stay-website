@@ -22,6 +22,8 @@ import { PaymentComponent } from './pages/payment/payment.component';
 import { ReceiptComponent } from './pages/receipt/receipt.component';
 import { MyBookingsComponent } from './pages/my-bookings/my-bookings.component';
 import { EnquiryComponent } from './pages/enquiry/enquiry.component';
+import { AboutComponent } from './pages/about/about.component';
+import { NavbarPrototypeComponent } from './pages/navbar-prototype/navbar-prototype.component';
 import { LoginComponent } from './pages/auth/login/login.component';
 import { RegisterComponent } from './pages/auth/register/register.component';
 import { AdminLayoutComponent } from './pages/admin/admin-layout/admin-layout.component';
@@ -56,7 +58,10 @@ import { PromoCodeMasterComponent } from './pages/admin/promo-code-master/promo-
     PaymentComponent,
     ReceiptComponent,
     MyBookingsComponent,
-    EnquiryComponent,PromoCodeMasterComponent,
+    EnquiryComponent,
+    AboutComponent,
+    NavbarPrototypeComponent,
+    PromoCodeMasterComponent,
     LoginComponent,
     RegisterComponent,
     AdminLayoutComponent,

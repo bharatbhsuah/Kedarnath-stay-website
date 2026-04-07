@@ -53,7 +53,7 @@ function generateReceiptPdf(booking, payment, user, property) {
         .text(`Status: ${payment.status}`)
         .text(`Paid At: ${payment.paid_at || '-'}`)
         .moveDown();
-    }x
+    }
 
     doc
       .text('Thank you for booking with us!', { align: 'center' })

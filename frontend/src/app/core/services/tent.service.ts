@@ -17,6 +17,11 @@ export interface Tent {
   amenities: string[];
   status: string;
   images: PropertyImage[];
+  bookedDateRanges?: Array<{
+    checkIn: string;
+    checkOut: string;
+    status: string;
+  }>;
 }
 
 @Injectable({ providedIn: 'root' })

@@ -6,6 +6,7 @@ import { RoomService, Room } from '../../core/services/room.service';
 import { TentService, Tent } from '../../core/services/tent.service';
 import { PropertyCardComponent } from '../../shared/components/property-card/property-card.component';
 import { LoadingSpinnerComponent } from '../../shared/components/loading-spinner/loading-spinner.component';
+import { environment } from '../../../environments/environment';
 
 @Component({
   selector: 'app-home',
@@ -94,6 +95,19 @@ import { LoadingSpinnerComponent } from '../../shared/components/loading-spinner
     </section>
 
     <section class="max-w-6xl mx-auto px-4 sm:px-6 py-12 sm:py-14">
+      <div class="card p-4 sm:p-5 mb-6 border-forest/20 bg-forest/5">
+        <p class="text-sm sm:text-base text-dark leading-relaxed">
+          Official Char Dham & Hemkund Sahib Yatra Registration Portal Using Web Portal:
+          <a
+            [href]="yatraRegistrationUrl"
+            target="_blank"
+            rel="noopener noreferrer"
+            class="text-forest font-semibold hover:underline"
+          >
+            Chardham & Shri Hemkund Sahib Yatra Registration
+          </a>
+        </p>
+      </div>
       <h2 class="font-heading text-2xl sm:text-3xl text-dark mb-6">Featured Rooms</h2>
       <app-loading-spinner [show]="loadingRooms"></app-loading-spinner>
       <div class="grid sm:grid-cols-2 lg:grid-cols-3 gap-6" *ngIf="!loadingRooms">
@@ -165,6 +179,7 @@ import { LoadingSpinnerComponent } from '../../shared/components/loading-spinner
   `
 })
 export class HomeComponent {
+  yatraRegistrationUrl = environment.yatraRegistrationUrl;
   searchTab: 'room' | 'tent' = 'room';
   searchForm = this.fb.group({
     checkin: ['', Validators.required],

@@ -19,66 +19,63 @@ interface AdminTent {
 @Component({
   selector: 'app-manage-tents',
   template: `
-    <h1 class="font-heading text-2xl mb-4">Manage Tents</h1>
-    <div class="flex justify-between items-center mb-4">
-      <div class="text-sm text-muted">
-        Add, edit and manage all tent listings.
+    <section class="space-y-4">
+      <div class="flex justify-between items-center gap-3">
+        <div>
+          <h1 class="font-heading text-2xl">Manage Tents</h1>
+          <p class="text-sm text-muted mt-1">Tent inventory grouped by hotel.</p>
+        </div>
+        <a routerLink="/admin/tents/new" class="btn-primary text-xs">Add Tent</a>
       </div>
-      <a routerLink="/admin/tents/new" class="btn-primary text-xs">Add Tent</a>
-    </div>
-    <app-loading-spinner [show]="loading"></app-loading-spinner>
-    <div *ngIf="!loading">
-      <div *ngIf="groupedTents.length === 0" class="text-sm text-muted">
+
+      <app-loading-spinner [show]="loading"></app-loading-spinner>
+
+      <div *ngIf="!loading && groupedTents.length === 0" class="card p-6 text-sm text-muted">
         No tents created yet.
       </div>
-      <div *ngFor="let group of groupedTents" class="mb-6">
-        <h2 class="font-semibold mb-2 text-sm uppercase tracking-widest">
-          Hotel: {{ group.hotelName }}
-        </h2>
+
+      <div *ngFor="let group of groupedTents" class="card p-3 sm:p-4">
+        <h2 class="font-semibold mb-3 text-sm uppercase tracking-widest">Hotel: {{ group.hotelName }}</h2>
         <div class="overflow-x-auto">
-          <table class="min-w-full text-sm border border-sand">
-            <thead class="bg-sand text-xs uppercase tracking-widest">
+          <table>
+            <thead>
               <tr>
-                <th class="px-3 py-2 text-left">ID</th>
-                <th class="px-3 py-2 text-left">Name</th>
-                <th class="px-3 py-2 text-left">Type</th>
-                <th class="px-3 py-2 text-left">Capacity</th>
-                <th class="px-3 py-2 text-left">Reg.</th>
-                <th class="px-3 py-2 text-left">Arrival</th>
-                <th class="px-3 py-2 text-left">Total</th>
-                <th class="px-3 py-2 text-left">Status</th>
-                <th class="px-3 py-2 text-left">Actions</th>
+                <th>ID</th>
+                <th>Name</th>
+                <th>Type</th>
+                <th>Capacity</th>
+                <th>Reg.</th>
+                <th>Arrival</th>
+                <th>Total</th>
+                <th>Status</th>
+                <th>Actions</th>
               </tr>
             </thead>
             <tbody>
-              <tr *ngFor="let t of group.tents" class="border-t border-sand">
-                <td class="px-3 py-2">{{ t.id }}</td>
-                <td class="px-3 py-2">{{ t.name }}</td>
-                <td class="px-3 py-2">{{ t.type }}</td>
-                <td class="px-3 py-2">{{ t.capacity }}</td>
-                <td class="px-3 py-2">{{ t.registrationAmount | currencyInr }}</td>
-                <td class="px-3 py-2">{{ t.arrivalAmount | currencyInr }}</td>
-                <td class="px-3 py-2">{{ t.totalPrice | currencyInr }}</td>
-                <td class="px-3 py-2">{{ t.status }}</td>
-                <td class="px-3 py-2 space-x-2">
-                  <a
-                    [routerLink]="['/admin/tents', t.id, 'edit']"
-                    class="btn-primary text-xs inline-block"
-                    >Edit</a
-                  >
-                  <button class="btn-gold text-xs" (click)="toggleStatus(t)">
-                    Toggle Status
-                  </button>
-                  <button class="btn-primary text-xs" (click)="delete(t)">
-                    Delete
-                  </button>
+              <tr *ngFor="let t of group.tents">
+                <td>{{ t.id }}</td>
+                <td class="font-medium">{{ t.name }}</td>
+                <td>{{ t.type }}</td>
+                <td>{{ t.capacity }}</td>
+                <td>{{ t.registrationAmount | currencyInr }}</td>
+                <td>{{ t.arrivalAmount | currencyInr }}</td>
+                <td>{{ t.totalPrice | currencyInr }}</td>
+                <td>
+                  <span class="status-pill" [ngClass]="t.status === 'active' ? 'confirmed' : 'cancelled'">{{ t.status }}</span>
+                </td>
+                <td>
+                  <div class="admin-actions">
+                    <a [routerLink]="['/admin/tents', t.id, 'edit']" class="btn-secondary text-xs">Edit</a>
+                    <button class="btn-gold text-xs" (click)="toggleStatus(t)">Toggle Status</button>
+                    <button class="btn-danger text-xs" (click)="delete(t)">Delete</button>
+                  </div>
                 </td>
               </tr>
             </tbody>
           </table>
         </div>
       </div>
-    </div>
+    </section>
   `
 })
 export class ManageTentsComponent {

@@ -14,6 +14,8 @@ import { MyBookingsComponent } from './pages/my-bookings/my-bookings.component';
 import { EnquiryComponent } from './pages/enquiry/enquiry.component';
 import { LoginComponent } from './pages/auth/login/login.component';
 import { RegisterComponent } from './pages/auth/register/register.component';
+import { AboutComponent } from './pages/about/about.component';
+import { NavbarPrototypeComponent } from './pages/navbar-prototype/navbar-prototype.component';
 import { AdminLayoutComponent } from './pages/admin/admin-layout/admin-layout.component';
 import { DashboardComponent } from './pages/admin/dashboard/dashboard.component';
 import { ManageRoomsComponent } from './pages/admin/manage-rooms/manage-rooms.component';
@@ -52,6 +54,8 @@ const routes: Routes = [
     component: MyBookingsComponent
   },
   { path: 'enquiry', component: EnquiryComponent },
+  { path: 'about', component: AboutComponent },
+  { path: 'design/navbar-prototype', component: NavbarPrototypeComponent },
   { path: 'login', component: LoginComponent },
   { path: 'register', component: RegisterComponent },
   {

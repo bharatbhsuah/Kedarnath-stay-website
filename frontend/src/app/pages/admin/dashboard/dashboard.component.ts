@@ -10,7 +10,41 @@ interface DashboardData {
   thisMonthRevenue: number;
   occupancy: number;
   pendingEnquiries: number;
-  recentBookings: any[];
+  recentBookings: BookingRow[];
+  hotelWiseSummary: HotelWiseSummary[];
+}
+
+interface HotelWiseSummary {
+  hotel_name: string;
+  total_bookings: number;
+  confirmed_bookings: number;
+  pending_bookings: number;
+  paid_revenue: number;
+}
+
+interface BookingRow {
+  booking_ref: string;
+  guest_name: string;
+  guest_phone: string;
+  property_name: string;
+  property_type: string;
+  check_in: string;
+  check_out: string;
+  arrival_amount: number;
+  status: string;
+  hotel_name?: string | null;
+}
+
+interface HotelBookingFilters {
+  query: string;
+  status: string;
+  propertyType: string;
+}
+
+interface HotelBookingGroup {
+  hotelName: string;
+  bookings: BookingRow[];
+  filters: HotelBookingFilters;
 }
 
 @Component({
@@ -41,36 +75,81 @@ interface DashboardData {
         </div>
       </div>
 
-      <div class="card p-4">
-        <h2 class="font-semibold mb-2 text-sm uppercase tracking-widest">Recent bookings</h2>
-        <div *ngIf="!data.recentBookings.length" class="text-xs text-muted">
-          No bookings yet.
+      <div class="card p-4 mt-6">
+        <h2 class="font-semibold mb-2 text-sm uppercase tracking-widest">Hotel-wise Booking Details</h2>
+        <div *ngIf="!hotelBookingGroups.length" class="text-xs text-muted">
+          No hotel-wise booking data yet.
         </div>
-        <div *ngIf="data.recentBookings.length" class="overflow-x-auto">
-          <table class="min-w-full text-xs">
-            <thead class="bg-sand">
-              <tr>
-                <th class="px-3 py-2 text-left">Ref</th>
-                <th class="px-3 py-2 text-left">Guest</th>
-                <th class="px-3 py-2 text-left">Type</th>
-                <th class="px-3 py-2 text-left">Dates</th>
-                <th class="px-3 py-2 text-left">Amount</th>
-                <th class="px-3 py-2 text-left">Status</th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr *ngFor="let b of data.recentBookings" class="border-t border-sand">
-                <td class="px-3 py-2">{{ b.booking_ref }}</td>
-                <td class="px-3 py-2">{{ b.guest_name || '–' }}</td>
-                <td class="px-3 py-2">{{ b.property_type }}</td>
-                <td class="px-3 py-2">
-                  {{ b.check_in }} – {{ b.check_out }}
-                </td>
-                <td class="px-3 py-2">{{ b.total_amount | currencyInr }}</td>
-                <td class="px-3 py-2">{{ b.status }}</td>
-              </tr>
-            </tbody>
-          </table>
+        <div *ngFor="let group of hotelBookingGroups" class="border border-sand rounded-lg p-4 mb-4 bg-cream-strong">
+          <div class="flex flex-wrap items-center justify-between gap-2 mb-3">
+            <h3 class="font-semibold text-sm text-dark">{{ group.hotelName }}</h3>
+            <span class="text-xs text-muted">
+              {{ filteredBookings(group).length }} of {{ group.bookings.length }} bookings
+            </span>
+          </div>
+
+          <div class="grid md:grid-cols-3 gap-3 mb-3">
+            <input
+              type="text"
+              class="form-input"
+              placeholder="Search by ref, guest, contact or unit"
+              [value]="group.filters.query"
+              (input)="setGroupFilter(group.hotelName, 'query', $any($event.target).value)"
+            />
+            <select
+              class="form-input"
+              [value]="group.filters.status"
+              (change)="setGroupFilter(group.hotelName, 'status', $any($event.target).value)"
+            >
+              <option value="">All statuses</option>
+              <option *ngFor="let status of statusOptions(group)" [value]="status">{{ status }}</option>
+            </select>
+            <select
+              class="form-input"
+              [value]="group.filters.propertyType"
+              (change)="setGroupFilter(group.hotelName, 'propertyType', $any($event.target).value)"
+            >
+              <option value="">All unit types</option>
+              <option *ngFor="let type of propertyTypeOptions(group)" [value]="type">{{ type }}</option>
+            </select>
+          </div>
+
+          <div *ngIf="!filteredBookings(group).length" class="text-xs text-muted">
+            No bookings match these filters.
+          </div>
+          <div *ngIf="filteredBookings(group).length" class="overflow-x-auto">
+            <table>
+              <thead>
+                <tr>
+                  <th>Reference</th>
+                  <th>Guest</th>
+                  <th>Contact Number (Booking)</th>
+                  <th>Stay</th>
+                  <th>Due On Arrival</th>
+                  <th>Status</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr *ngFor="let b of filteredBookings(group)">
+                  <td>
+                    <div class="admin-ref">{{ b.booking_ref }}</div>
+                  </td>
+                  <td>
+                    <div class="font-medium">{{ b.guest_name || '-' }}</div>
+                  </td>
+                  <td>{{ b.guest_phone || '-' }}</td>
+                  <td>
+                    <div class="font-medium">{{ b.property_name || '-' }} <span class="admin-subtext">({{ b.property_type }})</span></div>
+                    <div class="admin-subtext">{{ formatDateRange(b.check_in, b.check_out) }}</div>
+                  </td>
+                  <td class="font-semibold">{{ b.arrival_amount | currencyInr }}</td>
+                  <td>
+                    <span class="status-pill" [ngClass]="statusClass(b.status)">{{ b.status }}</span>
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
         </div>
       </div>
     </div>
@@ -80,6 +159,12 @@ export class DashboardComponent {
   data: DashboardData | null = null;
   loading = false;
   hotelName: string | null = null;
+  hotelBookingGroups: HotelBookingGroup[] = [];
+  private readonly dateFormatter = new Intl.DateTimeFormat('en-IN', {
+    day: '2-digit',
+    month: 'short',
+    year: 'numeric'
+  });
 
   constructor(private http: HttpClient) {
     this.load();
@@ -91,6 +176,7 @@ export class DashboardComponent {
     this.http.get<DashboardData>(`${environment.apiUrl}/admin/dashboard`).subscribe({
       next: (d) => {
         this.data = d;
+        this.buildHotelBookingGroups(d.recentBookings || []);
         this.loading = false;
       },
       error: () => {
@@ -109,5 +195,98 @@ export class DashboardComponent {
       }
     });
   }
-}
 
+  private buildHotelBookingGroups(bookings: BookingRow[]): void {
+    const byHotel = new Map<string, BookingRow[]>();
+    bookings.forEach((booking) => {
+      const hotel = booking.hotel_name || 'Unassigned';
+      if (!byHotel.has(hotel)) {
+        byHotel.set(hotel, []);
+      }
+      byHotel.get(hotel)!.push(booking);
+    });
+
+    this.hotelBookingGroups = Array.from(byHotel.entries())
+      .sort(([a], [b]) => a.localeCompare(b))
+      .map(([hotelName, hotelBookings]) => ({
+        hotelName,
+        bookings: hotelBookings,
+        filters: {
+          query: '',
+          status: '',
+          propertyType: ''
+        }
+      }));
+  }
+
+  setGroupFilter(
+    hotelName: string,
+    key: keyof HotelBookingFilters,
+    value: string
+  ): void {
+    this.hotelBookingGroups = this.hotelBookingGroups.map((group) => {
+      if (group.hotelName !== hotelName) {
+        return group;
+      }
+      return {
+        ...group,
+        filters: {
+          ...group.filters,
+          [key]: value || ''
+        }
+      };
+    });
+  }
+
+  statusOptions(group: HotelBookingGroup): string[] {
+    return Array.from(new Set(group.bookings.map((b) => (b.status || '').trim()).filter(Boolean)))
+      .sort((a, b) => a.localeCompare(b));
+  }
+
+  propertyTypeOptions(group: HotelBookingGroup): string[] {
+    return Array.from(new Set(group.bookings.map((b) => (b.property_type || '').trim()).filter(Boolean)))
+      .sort((a, b) => a.localeCompare(b));
+  }
+
+  filteredBookings(group: HotelBookingGroup): BookingRow[] {
+    const query = group.filters.query.trim().toLowerCase();
+    const status = group.filters.status.trim().toLowerCase();
+    const propertyType = group.filters.propertyType.trim().toLowerCase();
+
+    return group.bookings.filter((booking) => {
+      const matchesStatus = !status || (booking.status || '').toLowerCase() === status;
+      const matchesType = !propertyType || (booking.property_type || '').toLowerCase() === propertyType;
+      const matchesQuery = !query || [
+        booking.booking_ref,
+        booking.guest_name,
+        booking.guest_phone,
+        booking.property_name
+      ].some((field) => (field || '').toLowerCase().includes(query));
+      return matchesStatus && matchesType && matchesQuery;
+    });
+  }
+
+  formatDateRange(checkIn: string, checkOut: string): string {
+    return `${this.formatDate(checkIn)} to ${this.formatDate(checkOut)}`;
+  }
+
+  private formatDate(value: string): string {
+    if (!value) {
+      return '-';
+    }
+    const parsed = new Date(value);
+    if (Number.isNaN(parsed.getTime())) {
+      return value;
+    }
+    return this.dateFormatter.format(parsed);
+  }
+
+  statusClass(status: string): string {
+    const normalized = (status || '').toLowerCase();
+    if (normalized === 'pending') return 'pending';
+    if (normalized === 'confirmed') return 'confirmed';
+    if (normalized === 'cancelled') return 'cancelled';
+    if (normalized === 'completed') return 'completed';
+    return 'read';
+  }
+}

@@ -9,6 +9,12 @@ import { LoadingSpinnerComponent } from '../../shared/components/loading-spinner
 
 type PropertyType = 'room' | 'tent';
 
+type BookedDateRange = {
+  checkIn: string;
+  checkOut: string;
+  status: string;
+};
+
 @Component({
   selector: 'app-property-detail',
   template: `
@@ -42,18 +48,18 @@ type PropertyType = 'room' | 'tent';
                 </button>
               </div>
               <div *ngIf="allImages.length > 1" class="absolute bottom-2 left-1/2 -translate-x-1/2 flex gap-2">
-            <button
-  *ngFor="let img of allImages; let i = index"
-  type="button"
-  class="w-2 h-2 rounded-full transition-colors"
-  [ngClass]="{
-    'bg-white': i === currentImageIndex,
-    'bg-white/50': i !== currentImageIndex,
-    'ring-2 ring-white/50': i === currentImageIndex
-  }"
-  (click)="goToImage(i); $event.stopPropagation()"
-  [attr.aria-label]="'Image ' + (i + 1)"
-></button>
+                <button
+                  *ngFor="let img of allImages; let i = index"
+                  type="button"
+                  class="w-2 h-2 rounded-full transition-colors"
+                  [ngClass]="{
+                    'bg-white': i === currentImageIndex,
+                    'bg-white/50': i !== currentImageIndex,
+                    'ring-2 ring-white/50': i === currentImageIndex
+                  }"
+                  (click)="goToImage(i); $event.stopPropagation()"
+                  [attr.aria-label]="'Image ' + (i + 1)"
+                ></button>
               </div>
             </div>
           </div>
@@ -81,11 +87,23 @@ type PropertyType = 'room' | 'tent';
           </div>
 
           <div class="card p-4 bg-sand/30 border-sand/60">
-            <h2 class="font-semibold text-dark mb-2 text-sm">Availability</h2>
-            <p class="text-sm text-muted leading-relaxed">
-              Select your check‑in and check‑out dates in the booking panel to see pricing. Confirmed
-              bookings are blocked and cannot be double‑booked.
-            </p>
+            <h2 class="font-semibold text-dark mb-2 text-sm">Already Booked Dates</h2>
+            <div *ngIf="bookedDateRanges.length; else noBookedDates" class="space-y-2">
+              <div class="text-xs text-muted">These date ranges are unavailable for new bookings:</div>
+              <div class="grid sm:grid-cols-2 gap-2">
+                <div
+                  *ngFor="let range of bookedDateRanges"
+                  class="rounded-md border border-rose-200 bg-rose-50 px-3 py-2 text-xs text-rose-900"
+                >
+                  {{ formatDate(range.checkIn) }} to {{ formatDate(range.checkOut) }}
+                </div>
+              </div>
+            </div>
+            <ng-template #noBookedDates>
+              <p class="text-sm text-muted leading-relaxed">
+                No upcoming blocked dates right now.
+              </p>
+            </ng-template>
           </div>
         </div>
 
@@ -103,17 +121,20 @@ type PropertyType = 'room' | 'tent';
             <form [formGroup]="bookingForm" (ngSubmit)="goToBooking()" class="space-y-4">
               <div>
                 <label class="block text-xs uppercase tracking-widest mb-1.5 text-muted">Check-in</label>
-                <input type="date" formControlName="checkIn" class="w-full" />
+                <input type="date" formControlName="checkIn" class="w-full" [attr.min]="todayDate" />
                 <div class="text-xs text-red-600 mt-1" *ngIf="submitted && bookingForm.get('checkIn')?.invalid">
                   Check-in is required.
                 </div>
               </div>
               <div>
                 <label class="block text-xs uppercase tracking-widest mb-1.5 text-muted">Check-out</label>
-                <input type="date" formControlName="checkOut" class="w-full" />
+                <input type="date" formControlName="checkOut" class="w-full" [attr.min]="minCheckoutDate" />
                 <div class="text-xs text-red-600 mt-1" *ngIf="submitted && bookingForm.get('checkOut')?.invalid">
                   Check-out is required.
                 </div>
+              </div>
+              <div class="text-xs text-red-600 -mt-1" *ngIf="dateOverlapError">
+                {{ dateOverlapError }}
               </div>
               <div class="text-sm text-red-600 font-medium my-3">
                 Sleeps up to {{ property.capacity }} guests means max {{ property.capacity }} adults per {{ type === 'room' ? 'room' : 'tent' }}.
@@ -139,6 +160,10 @@ export class PropertyDetailComponent {
   error = '';
   allImages: string[] = [];
   currentImageIndex = 0;
+  bookedDateRanges: BookedDateRange[] = [];
+  todayDate = this.toYmd(new Date());
+  minCheckoutDate = this.todayDate;
+  dateOverlapError = '';
 
   bookingForm = this.fb.group({
     checkIn: ['', Validators.required],
@@ -152,6 +177,12 @@ export class PropertyDetailComponent {
     private fb: FormBuilder,
     private router: Router
   ) {
+    this.bookingForm.valueChanges.subscribe((value) => {
+      const checkIn = value.checkIn || '';
+      this.minCheckoutDate = checkIn || this.todayDate;
+      this.dateOverlapError = this.getDateOverlapError(checkIn, value.checkOut || '');
+    });
+
     this.route.paramMap.subscribe((params) => {
       const typeParam = params.get('type') as PropertyType | null;
       const idParam = params.get('id');
@@ -173,9 +204,16 @@ export class PropertyDetailComponent {
     obs.subscribe({
       next: (prop) => {
         this.property = prop;
+        this.bookedDateRanges = [...(prop.bookedDateRanges || [])].sort((a, b) =>
+          a.checkIn.localeCompare(b.checkIn)
+        );
         this.allImages = (prop.images || []).map((i) => i.url);
         this.currentImageIndex = Math.max(0, (prop.images || []).findIndex((i) => i.isPrimary));
         if (this.currentImageIndex < 0) this.currentImageIndex = 0;
+        this.dateOverlapError = this.getDateOverlapError(
+          this.bookingForm.value.checkIn || '',
+          this.bookingForm.value.checkOut || ''
+        );
         this.loading = false;
       },
       error: () => {
@@ -201,15 +239,55 @@ export class PropertyDetailComponent {
   goToBooking(): void {
     this.submitted = true;
     this.error = '';
+    const { checkIn, checkOut } = this.bookingForm.value;
+    this.dateOverlapError = this.getDateOverlapError(checkIn || '', checkOut || '');
+
     if (this.bookingForm.invalid) {
       this.error = 'Please select valid dates.';
       return;
     }
-    const { checkIn, checkOut } = this.bookingForm.value;
+    if (this.dateOverlapError) {
+      this.error = this.dateOverlapError;
+      return;
+    }
+
     const guests = this.property?.capacity || 1;
     this.router.navigate(['/booking', this.type, this.id], {
       queryParams: { checkIn, checkOut, guests }
     });
   }
-}
 
+  formatDate(dateText: string): string {
+    if (!dateText) {
+      return '';
+    }
+    const date = new Date(`${dateText}T00:00:00`);
+    return date.toLocaleDateString('en-IN', {
+      day: '2-digit',
+      month: 'short',
+      year: 'numeric'
+    });
+  }
+
+  private getDateOverlapError(checkIn: string, checkOut: string): string {
+    if (!checkIn || !checkOut) {
+      return '';
+    }
+    if (checkOut <= checkIn) {
+      return 'Check-out must be after check-in.';
+    }
+    const hasOverlap = this.bookedDateRanges.some(
+      (range) => !(checkOut <= range.checkIn || checkIn >= range.checkOut)
+    );
+    return hasOverlap
+      ? 'Selected dates overlap with an existing booking. Please choose different dates.'
+      : '';
+  }
+
+  private toYmd(date: Date): string {
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const day = String(date.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+  }
+}

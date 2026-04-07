@@ -16,90 +16,91 @@ interface PriceSetting {
 }
 
 @Component({
- 
   selector: 'app-price-settings',
   template: `
-    <h1 class="font-heading text-2xl mb-4">Price Settings</h1>
-    <app-loading-spinner [show]="loading"></app-loading-spinner>
-    <div class="grid md:grid-cols-[2fr,1fr] gap-6">
-      <div class="card p-4">
-        <h2 class="font-semibold mb-2 text-sm uppercase tracking-widest">Existing rules</h2>
-        <div *ngIf="!loading && settings.length === 0" class="text-sm text-muted">
-          No price rules defined yet.
+    <section class="space-y-4">
+      <h1 class="font-heading text-2xl">Price Settings</h1>
+      <app-loading-spinner [show]="loading"></app-loading-spinner>
+
+      <div class="grid xl:grid-cols-[2fr,1fr] gap-6">
+        <div class="card p-3 sm:p-4">
+          <h2 class="font-semibold mb-3 text-sm uppercase tracking-widest">Existing Rules</h2>
+          <div *ngIf="!loading && settings.length === 0" class="text-sm text-muted p-3">
+            No price rules defined yet.
+          </div>
+          <div *ngIf="settings.length" class="overflow-x-auto">
+            <table>
+              <thead>
+                <tr>
+                  <th>Type</th>
+                  <th>Property ID</th>
+                  <th>Season</th>
+                  <th>Price</th>
+                  <th>Weekend</th>
+                  <th>Tax %</th>
+                  <th>Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr *ngFor="let s of settings">
+                  <td>{{ s.property_type }}</td>
+                  <td>{{ s.property_id }}</td>
+                  <td>{{ s.season }}</td>
+                  <td>{{ s.price_per_night }}</td>
+                  <td>{{ s.weekend_surcharge }}</td>
+                  <td>{{ s.tax_percent }}</td>
+                  <td>
+                    <div class="admin-actions">
+                      <button class="btn-secondary text-xs" (click)="editSetting(s)">Edit</button>
+                      <button class="btn-danger text-xs" (click)="deleteSetting(s)">Delete</button>
+                    </div>
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
         </div>
-        <div *ngIf="settings.length" class="overflow-x-auto">
-          <table class="min-w-full text-sm border border-sand">
-            <thead class="bg-sand text-xs uppercase tracking-widest">
-              <tr>
-                <th class="px-3 py-2 text-left">Type</th>
-                <th class="px-3 py-2 text-left">Property ID</th>
-                <th class="px-3 py-2 text-left">Season</th>
-                <th class="px-3 py-2 text-left">Price</th>
-                <th class="px-3 py-2 text-left">Weekend</th>
-                <th class="px-3 py-2 text-left">Tax %</th>
-                <th class="px-3 py-2 text-left">Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr *ngFor="let s of settings" class="border-t border-sand">
-                <td class="px-3 py-2">{{ s.property_type }}</td>
-                <td class="px-3 py-2">{{ s.property_id }}</td>
-                <td class="px-3 py-2">{{ s.season }}</td>
-                <td class="px-3 py-2">{{ s.price_per_night }}</td>
-                <td class="px-3 py-2">{{ s.weekend_surcharge }}</td>
-                <td class="px-3 py-2">{{ s.tax_percent }}</td>
-                <td class="px-3 py-2 space-x-2">
-                  <button class="btn-primary text-xs" (click)="editSetting(s)">Edit</button>
-                  <button class="btn-gold text-xs" (click)="deleteSetting(s)">Delete</button>
-                </td>
-              </tr>
-            </tbody>
-          </table>
+
+        <div class="card p-4">
+          <h2 class="font-semibold mb-3 text-sm uppercase tracking-widest">{{ editing ? 'Edit Rule' : 'Add Rule' }}</h2>
+          <form [formGroup]="form" (ngSubmit)="save()" class="space-y-3 text-sm">
+            <div>
+              <label class="block text-xs uppercase mb-1 tracking-widest text-muted">Property Type</label>
+              <select formControlName="property_type">
+                <option value="room">Room</option>
+                <option value="tent">Tent</option>
+              </select>
+            </div>
+            <div>
+              <label class="block text-xs uppercase mb-1 tracking-widest text-muted">Property ID</label>
+              <input type="number" min="1" formControlName="property_id" />
+            </div>
+            <div>
+              <label class="block text-xs uppercase mb-1 tracking-widest text-muted">Season</label>
+              <select formControlName="season">
+                <option value="all">All</option>
+                <option value="peak">Peak</option>
+                <option value="off">Off</option>
+              </select>
+            </div>
+            <div>
+              <label class="block text-xs uppercase mb-1 tracking-widest text-muted">Price / Night</label>
+              <input type="number" min="0" formControlName="price_per_night" />
+            </div>
+            <div>
+              <label class="block text-xs uppercase mb-1 tracking-widest text-muted">Weekend Surcharge</label>
+              <input type="number" min="0" formControlName="weekend_surcharge" />
+            </div>
+            <div>
+              <label class="block text-xs uppercase mb-1 tracking-widest text-muted">Tax %</label>
+              <input type="number" min="0" formControlName="tax_percent" />
+            </div>
+            <button class="btn-primary w-full mt-2" type="submit">{{ editing ? 'Update Rule' : 'Create Rule' }}</button>
+            <div class="text-xs text-red-600" *ngIf="error">{{ error }}</div>
+          </form>
         </div>
       </div>
-      <div class="card p-4">
-        <h2 class="font-semibold mb-2 text-sm uppercase tracking-widest">
-          {{ editing ? 'Edit Rule' : 'Add Rule' }}
-        </h2>
-        <form [formGroup]="form" (ngSubmit)="save()" class="space-y-3 text-sm">
-          <div>
-            <label class="block text-xs uppercase mb-1 tracking-widest">Property Type</label>
-            <select formControlName="property_type">
-              <option value="room">Room</option>
-              <option value="tent">Tent</option>
-            </select>
-          </div>
-          <div>
-            <label class="block text-xs uppercase mb-1 tracking-widest">Property ID</label>
-            <input type="number" min="1" formControlName="property_id" />
-          </div>
-          <div>
-            <label class="block text-xs uppercase mb-1 tracking-widest">Season</label>
-            <select formControlName="season">
-              <option value="all">All</option>
-              <option value="peak">Peak</option>
-              <option value="off">Off</option>
-            </select>
-          </div>
-          <div>
-            <label class="block text-xs uppercase mb-1 tracking-widest">Price / night</label>
-            <input type="number" min="0" formControlName="price_per_night" />
-          </div>
-          <div>
-            <label class="block text-xs uppercase mb-1 tracking-widest">Weekend surcharge</label>
-            <input type="number" min="0" formControlName="weekend_surcharge" />
-          </div>
-          <div>
-            <label class="block text-xs uppercase mb-1 tracking-widest">Tax %</label>
-            <input type="number" min="0" formControlName="tax_percent" />
-          </div>
-          <button class="btn-primary w-full mt-2" type="submit">
-            {{ editing ? 'Update Rule' : 'Create Rule' }}
-          </button>
-          <div class="text-xs text-red-600" *ngIf="error">{{ error }}</div>
-        </form>
-      </div>
-    </div>
+    </section>
   `
 })
 export class PriceSettingsComponent {
@@ -181,4 +182,3 @@ export class PriceSettingsComponent {
     });
   }
 }
-

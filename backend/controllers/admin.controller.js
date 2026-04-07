@@ -10,60 +10,135 @@ function getTodayDateString() {
   return d.toISOString().slice(0, 10);
 }
 
+function getBookingHotelId(db, booking) {
+  if (!booking || !booking.property_type || !booking.property_id) {
+    return null;
+  }
+  if (booking.property_type === 'room') {
+    const room = db.prepare('SELECT hotel_id FROM rooms WHERE id = ?').get(booking.property_id);
+    return room ? room.hotel_id : null;
+  }
+  if (booking.property_type === 'tent') {
+    const tent = db.prepare('SELECT hotel_id FROM tents WHERE id = ?').get(booking.property_id);
+    return tent ? tent.hotel_id : null;
+  }
+  return null;
+}
+
 async function getDashboard(req, res) {
   try {
     const db = getDb();
+    const isHotelAdmin = req.user.role === 'hotel-admin';
+    const hotelId = req.user.hotelId ? Number(req.user.hotelId) : null;
+    if (isHotelAdmin && !hotelId) {
+      return res.status(400).json({ message: 'Hotel not assigned to this user' });
+    }
 
-    const totalBookings = db.prepare('SELECT COUNT(*) as count FROM bookings').get().count;
+    const scopedJoin =
+      " LEFT JOIN rooms r ON b.property_type = 'room' AND r.id = b.property_id " +
+      " LEFT JOIN tents t ON b.property_type = 'tent' AND t.id = b.property_id ";
+    const scopedWhere = isHotelAdmin ? ' WHERE COALESCE(r.hotel_id, t.hotel_id) = ?' : '';
+
+    const totalBookings = db
+      .prepare(`SELECT COUNT(*) as count FROM bookings b ${scopedJoin}${scopedWhere}`)
+      .get(...(isHotelAdmin ? [hotelId] : [])).count;
 
     const thisMonthStart = new Date();
     thisMonthStart.setDate(1);
     const monthStartStr = thisMonthStart.toISOString().slice(0, 10);
     const thisMonthRevenue = db
       .prepare(
-        `SELECT IFNULL(SUM(total_amount), 0) as revenue
-         FROM bookings
-         WHERE payment_status = 'paid' AND date(created_at) >= date(?)`
+        `SELECT IFNULL(SUM(b.total_amount), 0) as revenue
+         FROM bookings b
+         ${scopedJoin}
+         WHERE b.payment_status = 'paid'
+           AND date(b.created_at) >= date(?)
+           ${isHotelAdmin ? 'AND COALESCE(r.hotel_id, t.hotel_id) = ?' : ''}`
       )
-      .get(monthStartStr).revenue;
+      .get(...(isHotelAdmin ? [monthStartStr, hotelId] : [monthStartStr])).revenue;
 
     const today = getTodayDateString();
-    const activeRooms = db.prepare("SELECT COUNT(*) as c FROM rooms WHERE status = 'active'").get()
-      .c;
-    const activeTents = db.prepare("SELECT COUNT(*) as c FROM tents WHERE status = 'active'").get()
-      .c;
+    const activeRooms = db
+      .prepare(
+        `SELECT COUNT(*) as c FROM rooms
+         WHERE status = 'active'
+           ${isHotelAdmin ? 'AND hotel_id = ?' : ''}`
+      )
+      .get(...(isHotelAdmin ? [hotelId] : [])).c;
+    const activeTents = db
+      .prepare(
+        `SELECT COUNT(*) as c FROM tents
+         WHERE status = 'active'
+           ${isHotelAdmin ? 'AND hotel_id = ?' : ''}`
+      )
+      .get(...(isHotelAdmin ? [hotelId] : [])).c;
     const totalProperties = activeRooms + activeTents || 1;
 
     const todaysConfirmed = db
       .prepare(
-        `SELECT COUNT(*) as c FROM bookings 
-         WHERE status = 'confirmed' 
-           AND date(check_in) <= date(?) 
-           AND date(check_out) > date(?)`
+        `SELECT COUNT(*) as c
+         FROM bookings b
+         ${scopedJoin}
+         WHERE b.status = 'confirmed'
+           AND date(b.check_in) <= date(?)
+           AND date(b.check_out) > date(?)
+           ${isHotelAdmin ? 'AND COALESCE(r.hotel_id, t.hotel_id) = ?' : ''}`
       )
-      .get(today, today).c;
+      .get(...(isHotelAdmin ? [today, today, hotelId] : [today, today])).c;
     const occupancy = (todaysConfirmed / totalProperties) * 100;
 
-    const pendingEnquiries = db
-      .prepare(`SELECT COUNT(*) as c FROM enquiries WHERE status = 'new'`)
-      .get().c;
+    const pendingEnquiries = isHotelAdmin
+      ? 0
+      : db.prepare(`SELECT COUNT(*) as c FROM enquiries WHERE status = 'new'`).get().c;
 
     const recentBookings = db
       .prepare(
-        `SELECT b.*, u.name as guest_name 
-         FROM bookings b 
+        `SELECT b.*,
+                u.name as guest_name,
+                u.phone as guest_phone,
+                COALESCE(r.name, t.name) as property_name,
+                COALESCE(hr.name, ht.name) as hotel_name
+         FROM bookings b
          LEFT JOIN users u ON u.id = b.user_id
+         LEFT JOIN rooms r ON b.property_type = 'room' AND r.id = b.property_id
+         LEFT JOIN tents t ON b.property_type = 'tent' AND t.id = b.property_id
+         LEFT JOIN hotels hr ON hr.id = r.hotel_id
+         LEFT JOIN hotels ht ON ht.id = t.hotel_id
+         ${
+           isHotelAdmin
+             ? "WHERE COALESCE(r.hotel_id, t.hotel_id) = ? AND b.status = 'confirmed'"
+             : ''
+         }
          ORDER BY b.created_at DESC
-         LIMIT 10`
+         LIMIT 50`
       )
-      .all();
+      .all(...(isHotelAdmin ? [hotelId] : []));
+
+    const hotelWiseSummary = db
+      .prepare(
+        `SELECT COALESCE(h.name, 'Unassigned') as hotel_name,
+                COUNT(*) as total_bookings,
+                SUM(CASE WHEN b.status = 'confirmed' THEN 1 ELSE 0 END) as confirmed_bookings,
+                SUM(CASE WHEN b.status = 'pending' THEN 1 ELSE 0 END) as pending_bookings,
+                IFNULL(SUM(CASE WHEN b.payment_status = 'paid' THEN b.total_amount ELSE 0 END), 0) as paid_revenue
+         FROM bookings b
+         LEFT JOIN rooms r ON b.property_type = 'room' AND r.id = b.property_id
+         LEFT JOIN tents t ON b.property_type = 'tent' AND t.id = b.property_id
+         LEFT JOIN hotels h ON h.id = COALESCE(r.hotel_id, t.hotel_id)
+         WHERE 1 = 1
+           ${isHotelAdmin ? 'AND COALESCE(r.hotel_id, t.hotel_id) = ?' : ''}
+         GROUP BY COALESCE(h.id, -1), COALESCE(h.name, 'Unassigned')
+         ORDER BY paid_revenue DESC, total_bookings DESC`
+      )
+      .all(...(isHotelAdmin ? [hotelId] : []));
 
     return res.json({
       totalBookings,
       thisMonthRevenue,
       occupancy: Number(occupancy.toFixed(2)),
       pendingEnquiries,
-      recentBookings
+      recentBookings,
+      hotelWiseSummary
     });
   } catch (err) {
     console.error('Get dashboard error', err);
@@ -930,21 +1005,69 @@ async function setPrimaryTentImage(req, res) {
 
 async function listAdminBookings(req, res) {
   try {
-    const { status, propertyType, from, to } = req.query;
+    const { status, propertyType, from, to, hotelId: hotelIdFilter, paymentStatus, search, checkInFrom, checkInTo } = req.query;
     const db = getDb();
-    let query = `SELECT b.*, u.name as guest_name 
+    const isHotelAdmin = req.user.role === 'hotel-admin';
+    const hotelId = req.user.hotelId ? Number(req.user.hotelId) : null;
+    if (isHotelAdmin && !hotelId) {
+      return res.status(400).json({ message: 'Hotel not assigned to this user' });
+    }
+
+    let query = `SELECT b.*,
+                        u.name as guest_name,
+                        u.phone as guest_phone,
+                        COALESCE(r.name, t.name) as property_name,
+                        COALESCE(hr.name, ht.name) as hotel_name,
+                        b.arrival_amount as due_on_arrival,
+                        p.status as payment_record_status,
+                        p.razorpay_payment_id as submitted_transaction_id,
+                        p.razorpay_signature as submitted_method,
+                        p.paid_at as payment_submitted_at
                  FROM bookings b
                  LEFT JOIN users u ON u.id = b.user_id
+                 LEFT JOIN rooms r ON b.property_type = 'room' AND r.id = b.property_id
+                 LEFT JOIN tents t ON b.property_type = 'tent' AND t.id = b.property_id
+                 LEFT JOIN hotels hr ON hr.id = r.hotel_id
+                 LEFT JOIN hotels ht ON ht.id = t.hotel_id
+                 LEFT JOIN payments p ON p.id = (
+                   SELECT p2.id
+                   FROM payments p2
+                   WHERE p2.booking_id = b.id
+                   ORDER BY p2.id DESC
+                   LIMIT 1
+                 )
                  WHERE 1 = 1`;
     const params = [];
 
-    if (status) {
+    if (isHotelAdmin) {
+      query += ' AND COALESCE(r.hotel_id, t.hotel_id) = ?';
+      params.push(hotelId);
+    } else if (hotelIdFilter) {
+      query += ' AND COALESCE(r.hotel_id, t.hotel_id) = ?';
+      params.push(Number(hotelIdFilter));
+    }
+
+    if (isHotelAdmin) {
+      query += " AND b.status = 'confirmed'";
+    } else if (status) {
       query += ' AND b.status = ?';
       params.push(status);
     }
     if (propertyType) {
       query += ' AND b.property_type = ?';
       params.push(propertyType);
+    }
+    if (paymentStatus) {
+      query += ' AND b.payment_status = ?';
+      params.push(paymentStatus);
+    }
+    if (checkInFrom) {
+      query += ' AND date(b.check_in) >= date(?)';
+      params.push(checkInFrom);
+    }
+    if (checkInTo) {
+      query += ' AND date(b.check_in) <= date(?)';
+      params.push(checkInTo);
     }
     if (from) {
       query += ' AND date(b.created_at) >= date(?)';
@@ -953,6 +1076,11 @@ async function listAdminBookings(req, res) {
     if (to) {
       query += ' AND date(b.created_at) <= date(?)';
       params.push(to);
+    }
+    if (search) {
+      query += ' AND (b.booking_ref LIKE ? OR u.name LIKE ? OR u.phone LIKE ? OR COALESCE(r.name, t.name) LIKE ?)';
+      const like = `%${String(search).trim()}%`;
+      params.push(like, like, like, like);
     }
 
     query += ' ORDER BY b.created_at DESC';
@@ -981,11 +1109,69 @@ async function updateBookingStatus(req, res) {
     if (!existing) {
       return res.status(404).json({ message: 'Booking not found' });
     }
+    if (req.user.role === 'hotel-admin') {
+      const bookingHotelId = getBookingHotelId(db, existing);
+      if (!req.user.hotelId || Number(bookingHotelId) !== Number(req.user.hotelId)) {
+        return res.status(403).json({ message: 'Not allowed to modify bookings of another hotel' });
+      }
+    }
     db.prepare('UPDATE bookings SET status = ? WHERE id = ?').run(status, id);
     const booking = db.prepare('SELECT * FROM bookings WHERE id = ?').get(id);
     return res.json(booking);
   } catch (err) {
     console.error('Admin update booking status error', err);
+    return res.status(500).json({ message: 'Internal server error' });
+  }
+}
+
+async function approveBookingPayment(req, res) {
+  try {
+    const id = Number(req.params.id);
+    const db = getDb();
+    const booking = db.prepare('SELECT * FROM bookings WHERE id = ?').get(id);
+    if (!booking) {
+      return res.status(404).json({ message: 'Booking not found' });
+    }
+    if (req.user.role === 'hotel-admin') {
+      const bookingHotelId = getBookingHotelId(db, booking);
+      if (!req.user.hotelId || Number(bookingHotelId) !== Number(req.user.hotelId)) {
+        return res.status(403).json({ message: 'Not allowed to approve payments of another hotel' });
+      }
+    }
+    if (booking.payment_status === 'paid') {
+      return res.json({ success: true, booking });
+    }
+    if (booking.payment_status !== 'pending_verification') {
+      return res.status(400).json({ message: 'Only pending-verification payments can be approved' });
+    }
+
+    const payment = db.prepare('SELECT * FROM payments WHERE booking_id = ?').get(id);
+    if (!payment) {
+      return res.status(400).json({ message: 'No payment submission found for this booking' });
+    }
+
+    const now = new Date().toISOString();
+    db.prepare(
+      `UPDATE payments
+       SET status = 'success',
+           paid_at = COALESCE(paid_at, ?)
+       WHERE booking_id = ?`
+    ).run(now, id);
+
+    db.prepare(
+      `UPDATE bookings
+       SET payment_status = 'paid',
+           status = CASE
+             WHEN status IN ('cancelled', 'completed') THEN status
+             ELSE 'confirmed'
+           END
+       WHERE id = ?`
+    ).run(id);
+
+    const updated = db.prepare('SELECT * FROM bookings WHERE id = ?').get(id);
+    return res.json({ success: true, booking: updated });
+  } catch (err) {
+    console.error('Admin approve booking payment error', err);
     return res.status(500).json({ message: 'Internal server error' });
   }
 }
@@ -1198,6 +1384,7 @@ module.exports = {
   listEnquiries,
   updateEnquiryStatus,
   deleteEnquiry,
-  getAgentStats
+  getAgentStats,
+  approveBookingPayment
 };
 

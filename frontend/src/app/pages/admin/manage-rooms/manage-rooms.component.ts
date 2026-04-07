@@ -19,66 +19,63 @@ interface AdminRoom {
 @Component({
   selector: 'app-manage-rooms',
   template: `
-    <h1 class="font-heading text-2xl mb-4">Manage Rooms</h1>
-    <div class="flex justify-between items-center mb-4">
-      <div class="text-sm text-muted">
-        Add, edit and manage all room listings.
+    <section class="space-y-4">
+      <div class="flex justify-between items-center gap-3">
+        <div>
+          <h1 class="font-heading text-2xl">Manage Rooms</h1>
+          <p class="text-sm text-muted mt-1">Room inventory grouped by hotel.</p>
+        </div>
+        <a routerLink="/admin/rooms/new" class="btn-primary text-xs">Add Room</a>
       </div>
-      <a routerLink="/admin/rooms/new" class="btn-primary text-xs">Add Room</a>
-    </div>
-    <app-loading-spinner [show]="loading"></app-loading-spinner>
-    <div *ngIf="!loading">
-      <div *ngIf="groupedRooms.length === 0" class="text-sm text-muted">
+
+      <app-loading-spinner [show]="loading"></app-loading-spinner>
+
+      <div *ngIf="!loading && groupedRooms.length === 0" class="card p-6 text-sm text-muted">
         No rooms created yet.
       </div>
-      <div *ngFor="let group of groupedRooms" class="mb-6">
-        <h2 class="font-semibold mb-2 text-sm uppercase tracking-widest">
-          Hotel: {{ group.hotelName }}
-        </h2>
+
+      <div *ngFor="let group of groupedRooms" class="card p-3 sm:p-4">
+        <h2 class="font-semibold mb-3 text-sm uppercase tracking-widest">Hotel: {{ group.hotelName }}</h2>
         <div class="overflow-x-auto">
-          <table class="min-w-full text-sm border border-sand">
-            <thead class="bg-sand text-xs uppercase tracking-widest">
+          <table>
+            <thead>
               <tr>
-                <th class="px-3 py-2 text-left">ID</th>
-                <th class="px-3 py-2 text-left">Name</th>
-                <th class="px-3 py-2 text-left">Type</th>
-                <th class="px-3 py-2 text-left">Capacity</th>
-                <th class="px-3 py-2 text-left">Reg.</th>
-                <th class="px-3 py-2 text-left">Arrival</th>
-                <th class="px-3 py-2 text-left">Total</th>
-                <th class="px-3 py-2 text-left">Status</th>
-                <th class="px-3 py-2 text-left">Actions</th>
+                <th>ID</th>
+                <th>Name</th>
+                <th>Type</th>
+                <th>Capacity</th>
+                <th>Reg.</th>
+                <th>Arrival</th>
+                <th>Total</th>
+                <th>Status</th>
+                <th>Actions</th>
               </tr>
             </thead>
             <tbody>
-              <tr *ngFor="let r of group.rooms" class="border-t border-sand">
-                <td class="px-3 py-2">{{ r.id }}</td>
-                <td class="px-3 py-2">{{ r.name }}</td>
-                <td class="px-3 py-2">{{ r.type }}</td>
-                <td class="px-3 py-2">{{ r.capacity }}</td>
-                <td class="px-3 py-2">{{ r.registrationAmount | currencyInr }}</td>
-                <td class="px-3 py-2">{{ r.arrivalAmount | currencyInr }}</td>
-                <td class="px-3 py-2">{{ r.totalPrice | currencyInr }}</td>
-                <td class="px-3 py-2">{{ r.status }}</td>
-                <td class="px-3 py-2 space-x-2">
-                  <a
-                    [routerLink]="['/admin/rooms', r.id, 'edit']"
-                    class="btn-primary text-xs inline-block"
-                    >Edit</a
-                  >
-                  <button class="btn-gold text-xs" (click)="toggleStatus(r)">
-                    Toggle Status
-                  </button>
-                  <button class="btn-primary text-xs" (click)="delete(r)">
-                    Delete
-                  </button>
+              <tr *ngFor="let r of group.rooms">
+                <td>{{ r.id }}</td>
+                <td class="font-medium">{{ r.name }}</td>
+                <td>{{ r.type }}</td>
+                <td>{{ r.capacity }}</td>
+                <td>{{ r.registrationAmount | currencyInr }}</td>
+                <td>{{ r.arrivalAmount | currencyInr }}</td>
+                <td>{{ r.totalPrice | currencyInr }}</td>
+                <td>
+                  <span class="status-pill" [ngClass]="r.status === 'active' ? 'confirmed' : 'cancelled'">{{ r.status }}</span>
+                </td>
+                <td>
+                  <div class="admin-actions">
+                    <a [routerLink]="['/admin/rooms', r.id, 'edit']" class="btn-secondary text-xs">Edit</a>
+                    <button class="btn-gold text-xs" (click)="toggleStatus(r)">Toggle Status</button>
+                    <button class="btn-danger text-xs" (click)="delete(r)">Delete</button>
+                  </div>
                 </td>
               </tr>
             </tbody>
           </table>
         </div>
       </div>
-    </div>
+    </section>
   `
 })
 export class ManageRoomsComponent {

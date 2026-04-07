@@ -160,10 +160,28 @@ async function getTentById(req, res) {
         url: buildImageUrl(req, path.join('uploads', 'tents', path.basename(img.image_path)))
       }));
 
+    const bookedDateRanges = db
+      .prepare(
+        `SELECT check_in, check_out, status
+         FROM bookings
+         WHERE property_type = 'tent'
+           AND property_id = ?
+           AND status != 'cancelled'
+           AND date(check_out) >= date('now')
+         ORDER BY date(check_in) ASC`
+      )
+      .all(id)
+      .map((row) => ({
+        checkIn: row.check_in,
+        checkOut: row.check_out,
+        status: row.status
+      }));
+
     return res.json({
       ...tent,
       amenities: tent.amenities ? JSON.parse(tent.amenities) : [],
-      images
+      images,
+      bookedDateRanges
     });
   } catch (err) {
     console.error('Get tent by id error', err);

@@ -7,145 +7,241 @@ import { FormsModule } from '@angular/forms';
 import { LoadingSpinnerComponent } from '../../../shared/components/loading-spinner/loading-spinner.component';
 import { environment } from '../../../../environments/environment';
 import { CurrencyInrPipe } from '../../../shared/pipes/currency-inr.pipe';
+import { AuthService } from '../../../core/services/auth.service';
 
 interface AdminBooking {
   id: number;
   booking_ref: string;
   guest_name?: string;
+  guest_phone?: string;
+  hotel_name?: string;
+  property_name?: string;
   property_type: string;
   check_in: string;
   check_out: string;
   total_amount: number;
+  due_on_arrival?: number;
   status: string;
   payment_status: string;
+  payment_record_status?: string;
+  submitted_transaction_id?: string;
+  submitted_method?: string;
+  payment_submitted_at?: string;
+}
+
+interface AdminHotel {
+  id: number;
+  name: string;
 }
 
 @Component({
   selector: 'app-bookings-list',
   template: `
-    <h1 class="font-heading text-2xl mb-4">Bookings</h1>
-
-    <div class="card p-4 mb-4 text-sm">
-      <div class="grid md:grid-cols-4 gap-3">
+    <section class="space-y-5">
+      <div class="flex flex-wrap items-end justify-between gap-3">
         <div>
-          <label class="block text-xs uppercase mb-1 tracking-widest">Status</label>
-          <select
-            [(ngModel)]="filter.status"
-            class="w-full border border-sand bg-cream px-2 py-1"
-          >
-            <option value="">All</option>
-            <option value="pending">Pending</option>
-            <option value="confirmed">Confirmed</option>
-            <option value="cancelled">Cancelled</option>
-            <option value="completed">Completed</option>
-          </select>
+          <h1 class="font-heading text-2xl">Bookings</h1>
+          <p class="text-sm text-muted mt-1">Enterprise booking operations with payment verification controls.</p>
+        </div>
+        <button class="btn-secondary text-xs" (click)="load()" [disabled]="loading">Refresh</button>
+      </div>
+
+      <div class="card p-4 sm:p-5 text-sm">
+        <div class="grid md:grid-cols-5 gap-3">
+          <div>
+            <label class="block text-xs uppercase mb-1 tracking-widest text-muted">Status</label>
+            <select [(ngModel)]="filter.status" class="w-full" [disabled]="isHotelAdmin">
+              <option value="">All</option>
+              <option value="pending">Pending</option>
+              <option value="confirmed">Confirmed</option>
+              <option value="cancelled">Cancelled</option>
+              <option value="completed">Completed</option>
+            </select>
+          </div>
+
+          <div>
+            <label class="block text-xs uppercase mb-1 tracking-widest text-muted">Property Type</label>
+            <select [(ngModel)]="filter.propertyType" class="w-full">
+              <option value="">All</option>
+              <option value="room">Room</option>
+              <option value="tent">Tent</option>
+            </select>
+          </div>
+
+          <div>
+            <label class="block text-xs uppercase mb-1 tracking-widest text-muted">Payment</label>
+            <select [(ngModel)]="filter.paymentStatus" class="w-full">
+              <option value="">All</option>
+              <option value="unpaid">Unpaid</option>
+              <option value="pending_verification">Pending Verification</option>
+              <option value="paid">Paid</option>
+              <option value="failed">Failed</option>
+            </select>
+          </div>
+
+          <div *ngIf="!isHotelAdmin">
+            <label class="block text-xs uppercase mb-1 tracking-widest text-muted">Hotel</label>
+            <select [(ngModel)]="filter.hotelId" class="w-full">
+              <option value="">All Hotels</option>
+              <option *ngFor="let h of hotels" [value]="h.id">{{ h.name }}</option>
+            </select>
+          </div>
+
+          <div>
+            <label class="block text-xs uppercase mb-1 tracking-widest text-muted">Booked From</label>
+            <input type="date" [(ngModel)]="filter.from" class="w-full" />
+          </div>
+
+          <div>
+            <label class="block text-xs uppercase mb-1 tracking-widest text-muted">Booked To</label>
+            <input type="date" [(ngModel)]="filter.to" class="w-full" />
+          </div>
         </div>
 
-        <div>
-          <label class="block text-xs uppercase mb-1 tracking-widest">Property Type</label>
-          <select
-            [(ngModel)]="filter.propertyType"
-            class="w-full border border-sand bg-cream px-2 py-1"
-          >
-            <option value="">All</option>
-            <option value="room">Room</option>
-            <option value="tent">Tent</option>
-          </select>
+        <div class="grid md:grid-cols-3 gap-3 mt-3">
+          <div>
+            <label class="block text-xs uppercase mb-1 tracking-widest text-muted">Check-in From</label>
+            <input type="date" [(ngModel)]="filter.checkInFrom" class="w-full" />
+          </div>
+          <div>
+            <label class="block text-xs uppercase mb-1 tracking-widest text-muted">Check-in To</label>
+            <input type="date" [(ngModel)]="filter.checkInTo" class="w-full" />
+          </div>
+          <div>
+            <label class="block text-xs uppercase mb-1 tracking-widest text-muted">Search</label>
+            <input
+              type="text"
+              [(ngModel)]="filter.search"
+              class="w-full"
+              placeholder="Ref / guest / contact / property"
+            />
+          </div>
         </div>
 
-        <div>
-          <label class="block text-xs uppercase mb-1 tracking-widest">From</label>
-          <input
-            type="date"
-            [(ngModel)]="filter.from"
-            class="w-full border border-sand bg-cream px-2 py-1"
-          />
-        </div>
-
-        <div>
-          <label class="block text-xs uppercase mb-1 tracking-widest">To</label>
-          <input
-            type="date"
-            [(ngModel)]="filter.to"
-            class="w-full border border-sand bg-cream px-2 py-1"
-          />
+        <div class="mt-4 admin-actions">
+          <button class="btn-primary text-xs" (click)="load()" [disabled]="loading">Apply Filters</button>
+          <button class="btn-tertiary text-xs" (click)="resetFilters()" [disabled]="loading">Reset</button>
         </div>
       </div>
 
-      <button class="btn-primary mt-3 text-xs" (click)="load()">
-        Apply Filters
-      </button>
-    </div>
+      <app-loading-spinner [show]="loading"></app-loading-spinner>
 
-    <app-loading-spinner [show]="loading"></app-loading-spinner>
-
-    <div *ngIf="!loading && bookings.length === 0" class="text-sm text-muted">
-      No bookings found.
-    </div>
-
-    <div *ngIf="bookings.length" class="card p-4">
-      <div class="overflow-x-auto">
-        <table class="min-w-full text-sm border border-sand">
-          <thead class="bg-sand text-xs uppercase tracking-widest">
-            <tr>
-              <th class="px-3 py-2 text-left">Ref</th>
-              <th class="px-3 py-2 text-left">Guest</th>
-              <th class="px-3 py-2 text-left">Type</th>
-              <th class="px-3 py-2 text-left">Dates</th>
-              <th class="px-3 py-2 text-left">Amount</th>
-              <th class="px-3 py-2 text-left">Status</th>
-              <th class="px-3 py-2 text-left">Payment</th>
-              <th class="px-3 py-2 text-left">Actions</th>
-            </tr>
-          </thead>
-
-          <tbody>
-            <tr *ngFor="let b of bookings" class="border-t border-sand">
-              <td class="px-3 py-2">{{ b.booking_ref }}</td>
-              <td class="px-3 py-2">{{ b.guest_name || '–' }}</td>
-              <td class="px-3 py-2">{{ b.property_type }}</td>
-              <td class="px-3 py-2">{{ b.check_in }} – {{ b.check_out }}</td>
-              <td class="px-3 py-2">{{ b.total_amount | currencyInr }}</td>
-              <td class="px-3 py-2">{{ b.status }}</td>
-              <td class="px-3 py-2">{{ b.payment_status }}</td>
-              <td class="px-3 py-2 space-x-2">
-                <select
-                  class="border border-sand bg-cream px-1 py-0.5 text-xs"
-                  [value]="b.status"
-                  (change)="updateStatus(b, $any($event.target).value)"
-                >
-                  <option value="pending">Pending</option>
-                  <option value="confirmed">Confirmed</option>
-                  <option value="cancelled">Cancelled</option>
-                  <option value="completed">Completed</option>
-                </select>
-
-                <a
-                  [routerLink]="['/receipt', b.id]"
-                  class="btn-primary text-xs inline-block"
-                >
-                  Receipt
-                </a>
-              </td>
-            </tr>
-          </tbody>
-        </table>
+      <div *ngIf="!loading && bookings.length === 0" class="card p-6 text-sm text-muted">
+        No bookings found for the current filters.
       </div>
-    </div>
+
+      <div *ngIf="bookings.length" class="card p-3 sm:p-4">
+        <div class="overflow-x-auto">
+          <table>
+            <thead>
+              <tr>
+                <th>Reference</th>
+                <th>Guest</th>
+                <th>Contact Number (Booking)</th>
+                <th>Stay</th>
+                <th>Due On Arrival</th>
+                <th>Booking Status</th>
+                <th>Payment</th>
+                <th *ngIf="!isHotelAdmin">Actions</th>
+              </tr>
+            </thead>
+
+            <tbody>
+              <tr *ngFor="let b of bookings">
+                <td>
+                  <div class="admin-ref">{{ b.booking_ref }}</div>
+                  <div class="admin-subtext mt-1">{{ b.hotel_name || '-' }}</div>
+                </td>
+                <td>
+                  <div class="font-medium">{{ b.guest_name || '-' }}</div>
+                </td>
+                <td>{{ b.guest_phone || '-' }}</td>
+                <td>
+                  <div class="font-medium">{{ b.property_name || '-' }} <span class="admin-subtext">({{ b.property_type }})</span></div>
+                  <div class="admin-subtext">{{ formatDateRange(b.check_in, b.check_out) }}</div>
+                </td>
+                <td>
+                  <div class="font-semibold">{{ (b.due_on_arrival ?? b.total_amount) | currencyInr }}</div>
+                </td>
+                <td>
+                  <span class="status-pill" [ngClass]="statusClass(b.status)">{{ b.status }}</span>
+                </td>
+                <td>
+                  <div>
+                    <span class="status-pill" [ngClass]="statusClass(b.payment_status)">{{ b.payment_status }}</span>
+                  </div>
+                  <div class="admin-subtext mt-1" *ngIf="b.submitted_transaction_id">
+                    Txn: {{ b.submitted_transaction_id }}
+                  </div>
+                  <div class="admin-subtext" *ngIf="b.submitted_method">
+                    Method: {{ b.submitted_method }}
+                  </div>
+                </td>
+                <td *ngIf="!isHotelAdmin">
+                  <div class="admin-actions">
+                    <select
+                      class="text-xs"
+                      [value]="b.status"
+                      (change)="updateStatus(b, $any($event.target).value)"
+                    >
+                      <option value="pending">Pending</option>
+                      <option value="confirmed">Confirmed</option>
+                      <option value="cancelled">Cancelled</option>
+                      <option value="completed">Completed</option>
+                    </select>
+
+                    <a [routerLink]="['/receipt', b.id]" class="btn-secondary text-xs">Receipt</a>
+
+                    <button
+                      type="button"
+                      class="btn-success text-xs"
+                      *ngIf="b.payment_status === 'pending_verification'"
+                      (click)="approvePayment(b)"
+                    >
+                      Approve Payment
+                    </button>
+                  </div>
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </section>
   `
 })
 export class BookingsListComponent {
   bookings: AdminBooking[] = [];
+  hotels: AdminHotel[] = [];
   loading = false;
+  isHotelAdmin = false;
 
   filter = {
     status: '',
+    paymentStatus: '',
     propertyType: '',
+    hotelId: '',
     from: '',
-    to: ''
+    to: '',
+    checkInFrom: '',
+    checkInTo: '',
+    search: ''
   };
 
-  constructor(private http: HttpClient) {
+  private readonly dateFormatter = new Intl.DateTimeFormat('en-IN', {
+    day: '2-digit',
+    month: 'short',
+    year: 'numeric'
+  });
+
+  constructor(private http: HttpClient, private auth: AuthService) {
+    const user = this.auth.getCurrentUser();
+    this.isHotelAdmin = user?.role === 'hotel-admin';
+    if (this.isHotelAdmin) {
+      this.filter.status = 'confirmed';
+    } else {
+      this.loadHotels();
+    }
     this.load();
   }
 
@@ -153,10 +249,19 @@ export class BookingsListComponent {
     this.loading = true;
 
     let params = new HttpParams();
-    if (this.filter.status) params = params.set('status', this.filter.status);
+    if (this.isHotelAdmin) {
+      params = params.set('status', 'confirmed');
+    } else if (this.filter.status) {
+      params = params.set('status', this.filter.status);
+    }
+    if (this.filter.paymentStatus) params = params.set('paymentStatus', this.filter.paymentStatus);
     if (this.filter.propertyType) params = params.set('propertyType', this.filter.propertyType);
+    if (!this.isHotelAdmin && this.filter.hotelId) params = params.set('hotelId', this.filter.hotelId);
     if (this.filter.from) params = params.set('from', this.filter.from);
     if (this.filter.to) params = params.set('to', this.filter.to);
+    if (this.filter.checkInFrom) params = params.set('checkInFrom', this.filter.checkInFrom);
+    if (this.filter.checkInTo) params = params.set('checkInTo', this.filter.checkInTo);
+    if (this.filter.search?.trim()) params = params.set('search', this.filter.search.trim());
 
     this.http
       .get<AdminBooking[]>(`${environment.apiUrl}/admin/bookings`, { params })
@@ -165,13 +270,78 @@ export class BookingsListComponent {
           this.bookings = list;
           this.loading = false;
         },
-        error: () => (this.loading = false)
+        error: () => {
+          this.loading = false;
+        }
       });
+  }
+
+  resetFilters(): void {
+    this.filter = {
+      status: this.isHotelAdmin ? 'confirmed' : '',
+      paymentStatus: '',
+      propertyType: '',
+      hotelId: '',
+      from: '',
+      to: '',
+      checkInFrom: '',
+      checkInTo: '',
+      search: ''
+    };
+    this.load();
+  }
+
+  private loadHotels(): void {
+    this.http.get<AdminHotel[]>(`${environment.apiUrl}/admin/hotels`).subscribe({
+      next: (list) => {
+        this.hotels = list || [];
+      },
+      error: () => {
+        this.hotels = [];
+      }
+    });
   }
 
   updateStatus(b: AdminBooking, status: string): void {
     this.http
       .put(`${environment.apiUrl}/admin/bookings/${b.id}/status`, { status })
       .subscribe(() => this.load());
+  }
+
+  approvePayment(b: AdminBooking): void {
+    const ok = window.confirm(
+      `Approve payment for booking ${b.booking_ref}? This will mark booking as paid.`
+    );
+    if (!ok) {
+      return;
+    }
+    this.http
+      .put(`${environment.apiUrl}/admin/bookings/${b.id}/approve-payment`, {})
+      .subscribe(() => this.load());
+  }
+
+  formatDateRange(checkIn: string, checkOut: string): string {
+    return `${this.formatDate(checkIn)} to ${this.formatDate(checkOut)}`;
+  }
+
+  private formatDate(value: string): string {
+    if (!value) {
+      return '-';
+    }
+    const parsed = new Date(value);
+    if (Number.isNaN(parsed.getTime())) {
+      return value;
+    }
+    return this.dateFormatter.format(parsed);
+  }
+
+  statusClass(status: string): string {
+    const normalized = (status || '').toLowerCase();
+    if (['pending', 'pending_verification', 'unpaid'].includes(normalized)) return 'pending';
+    if (['confirmed', 'paid', 'active', 'success'].includes(normalized)) return 'confirmed';
+    if (['cancelled', 'inactive', 'failed'].includes(normalized)) return 'cancelled';
+    if (['completed', 'replied'].includes(normalized)) return 'completed';
+    if (normalized === 'read') return 'read';
+    return 'read';
   }
 }

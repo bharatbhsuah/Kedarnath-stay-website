@@ -16,53 +16,54 @@ interface AdminHotel {
   selector: 'app-manage-hotels',
   standalone: false,
   template: `
-    <h1 class="font-heading text-2xl mb-4">Hotel Master</h1>
-    <div class="flex justify-between items-center mb-4">
-      <div class="text-sm text-muted">
-        Create, edit and manage hotels/branches.
+    <section class="space-y-4">
+      <div class="flex justify-between items-center gap-3">
+        <div>
+          <h1 class="font-heading text-2xl">Hotel Master</h1>
+          <p class="text-sm text-muted mt-1">Create, edit and manage hotels/branches.</p>
+        </div>
+        <a routerLink="/admin/hotels/new" class="btn-primary text-xs">Add Hotel</a>
       </div>
-      <a routerLink="/admin/hotels/new" class="btn-primary text-xs">Add Hotel</a>
-    </div>
-    <app-loading-spinner [show]="loading"></app-loading-spinner>
-    <div *ngIf="!loading">
-      <div *ngIf="hotels.length === 0" class="text-sm text-muted">
+
+      <app-loading-spinner [show]="loading"></app-loading-spinner>
+
+      <div *ngIf="!loading && hotels.length === 0" class="card p-6 text-sm text-muted">
         No hotels created yet.
       </div>
-      <div *ngIf="hotels.length" class="overflow-x-auto">
-        <table class="min-w-full text-sm border border-sand">
-          <thead class="bg-sand text-xs uppercase tracking-widest">
-            <tr>
-              <th class="px-3 py-2 text-left">ID</th>
-              <th class="px-3 py-2 text-left">Name</th>
-              <th class="px-3 py-2 text-left">City</th>
-              <th class="px-3 py-2 text-left">Status</th>
-              <th class="px-3 py-2 text-left">Actions</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr *ngFor="let h of hotels" class="border-t border-sand">
-              <td class="px-3 py-2">{{ h.id }}</td>
-              <td class="px-3 py-2">{{ h.name }}</td>
-              <td class="px-3 py-2">{{ h.city || '–' }}</td>
-              <td class="px-3 py-2">{{ h.status }}</td>
-              <td class="px-3 py-2 space-x-2">
-                <a
-                  [routerLink]="['/admin/hotels', h.id, 'edit']"
-                  class="btn-primary text-xs inline-block"
-                  >Edit</a
-                >
-                <button class="btn-gold text-xs" (click)="toggleStatus(h)">
-                  Toggle Status
-                </button>
-                <button class="btn-primary text-xs" (click)="delete(h)">
-                  Delete
-                </button>
-              </td>
-            </tr>
-          </tbody>
-        </table>
+
+      <div *ngIf="!loading && hotels.length" class="card p-3 sm:p-4">
+        <div class="overflow-x-auto">
+          <table>
+            <thead>
+              <tr>
+                <th>ID</th>
+                <th>Name</th>
+                <th>City</th>
+                <th>Status</th>
+                <th>Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr *ngFor="let h of hotels">
+                <td>{{ h.id }}</td>
+                <td class="font-medium">{{ h.name }}</td>
+                <td>{{ h.city || '-' }}</td>
+                <td>
+                  <span class="status-pill" [ngClass]="h.status === 'active' ? 'confirmed' : 'cancelled'">{{ h.status }}</span>
+                </td>
+                <td>
+                  <div class="admin-actions">
+                    <a [routerLink]="['/admin/hotels', h.id, 'edit']" class="btn-secondary text-xs">Edit</a>
+                    <button class="btn-gold text-xs" (click)="toggleStatus(h)">Toggle Status</button>
+                    <button class="btn-danger text-xs" (click)="delete(h)">Delete</button>
+                  </div>
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
       </div>
-    </div>
+    </section>
   `
 })
 export class ManageHotelsComponent {
@@ -109,4 +110,3 @@ export class ManageHotelsComponent {
     });
   }
 }
-

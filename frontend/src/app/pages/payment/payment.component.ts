@@ -1,5 +1,5 @@
 import { Component } from '@angular/core';
-import { ActivatedRoute, Router } from '@angular/router';
+import { ActivatedRoute } from '@angular/router';
 import { BookingService, Booking } from '../../core/services/booking.service';
 import { PaymentService } from '../../core/services/payment.service';
 
@@ -34,9 +34,100 @@ import { PaymentService } from '../../core/services/payment.service';
           </div>
         </div>
         <div class="pt-2">
-          <button class="btn-primary w-full" (click)="payNow()" [disabled]="loading">
-            Pay Registration Fee ({{ booking.registration_amount | currencyInr }})
-          </button>
+          <div *ngIf="verificationPending" class="rounded-md border border-amber-300 bg-amber-50 text-amber-900 px-3 py-2 text-sm">
+            {{ successMessage || 'Payment submitted. Verification is pending with admin.' }}
+          </div>
+
+          <div *ngIf="!verificationPending && isDesktop; else mobilePayment" class="space-y-4">
+            <div class="text-sm text-muted">
+              Scan QR from your phone UPI app and complete payment for
+              <span class="font-semibold text-dark">{{ booking.registration_amount | currencyInr }}</span>.
+            </div>
+            <div class="grid gap-4 sm:grid-cols-2">
+              <div class="border border-sand rounded-lg p-3">
+                <div class="font-semibold text-dark mb-2">Paytm</div>
+                <img
+                  [src]="paytmQrPath"
+                  alt="Paytm QR Code"
+                  class="w-full max-w-[220px] mx-auto rounded-md border border-sand"
+                />
+                <div class="mt-2 text-xs text-muted break-all">UPI ID: {{ upiIds.paytm || '-' }}</div>
+              </div>
+              <div class="border border-sand rounded-lg p-3">
+                <div class="font-semibold text-dark mb-2">PhonePe</div>
+                <img
+                  [src]="phonepeQrPath"
+                  alt="PhonePe QR Code"
+                  class="w-full max-w-[220px] mx-auto rounded-md border border-sand"
+                />
+                <div class="mt-2 text-xs text-muted break-all">UPI ID: {{ upiIds.phonepe || '-' }}</div>
+              </div>
+            </div>
+          </div>
+          <ng-template #mobilePayment>
+            <div class="space-y-4" *ngIf="!verificationPending">
+              <div class="text-sm text-muted">
+                Scan QR from another device, or use app buttons below to complete payment for
+                <span class="font-semibold text-dark">{{ booking.registration_amount | currencyInr }}</span>.
+              </div>
+              <div class="grid gap-4 sm:grid-cols-2">
+                <div class="border border-sand rounded-lg p-3">
+                  <div class="font-semibold text-dark mb-2">Paytm</div>
+                  <img
+                    [src]="paytmQrPath"
+                    alt="Paytm QR Code"
+                    class="w-full max-w-[220px] mx-auto rounded-md border border-sand"
+                  />
+                  <div class="mt-2 text-xs text-muted break-all">UPI ID: {{ upiIds.paytm || '-' }}</div>
+                </div>
+                <div class="border border-sand rounded-lg p-3">
+                  <div class="font-semibold text-dark mb-2">PhonePe</div>
+                  <img
+                    [src]="phonepeQrPath"
+                    alt="PhonePe QR Code"
+                    class="w-full max-w-[220px] mx-auto rounded-md border border-sand"
+                  />
+                  <div class="mt-2 text-xs text-muted break-all">UPI ID: {{ upiIds.phonepe || '-' }}</div>
+                </div>
+              </div>
+            </div>
+            <div class="grid gap-3 sm:grid-cols-2 mt-3" *ngIf="!verificationPending">
+              <button
+                type="button"
+                class="btn-primary text-center"
+                (click)="openPaymentApp('paytm')"
+                [disabled]="!deepLinks.paytm || loading"
+              >
+                Pay with Paytm ({{ booking.registration_amount | currencyInr }})
+              </button>
+              <button
+                type="button"
+                class="btn-secondary text-center"
+                (click)="openPaymentApp('phonepe')"
+                [disabled]="!deepLinks.phonepe || loading"
+              >
+                Pay with PhonePe ({{ booking.registration_amount | currencyInr }})
+              </button>
+            </div>
+          </ng-template>
+
+          <div class="mt-3" *ngIf="!verificationPending">
+            <button class="btn-primary w-full" (click)="confirmPayment()" [disabled]="loading">
+              I Have Completed Payment
+            </button>
+          </div>
+          <div class="text-xs text-muted mt-2">
+            If app link does not open, copy UPI ID and pay manually:
+            {{ upiIds.paytm }} / {{ upiIds.phonepe }}
+          </div>
+          <div class="mt-2 space-y-2">
+            <input
+              type="text"
+              class="w-full border border-sand rounded-md px-3 py-2"
+              placeholder="Transaction ID (optional)"
+              [(ngModel)]="transactionId"
+            />
+          </div>
           <div class="text-xs text-red-600 mt-2" *ngIf="error">{{ error }}</div>
         </div>
       </div>
@@ -50,15 +141,25 @@ export class PaymentComponent {
   loading = false;
   error = '';
   guestPhone = '';
+  transactionId = '';
+  successMessage = '';
+  deepLinks: { paytm: string; phonepe: string } = { paytm: '', phonepe: '' };
+  upiLinks: { paytm: string; phonepe: string } = { paytm: '', phonepe: '' };
+  upiIds: { paytm: string; phonepe: string } = { paytm: '', phonepe: '' };
+  verificationPending = false;
+  isDesktop = true;
+  paytmQrPath = 'assets/payments/paytm-qr.png';
+  phonepeQrPath = 'assets/payments/phonepe-qr.png';
+  selectedMethod: 'paytm' | 'phonepe' | 'upi' = 'upi';
   private routeParamsReady = false;
   private queryParamsReady = false;
 
   constructor(
     private route: ActivatedRoute,
     private bookingService: BookingService,
-    private paymentService: PaymentService,
-    private router: Router
+    private paymentService: PaymentService
   ) {
+    this.isDesktop = this.detectDesktop();
     this.route.paramMap.subscribe((params) => {
       const idParam = params.get('bookingId');
       if (idParam) {
@@ -90,7 +191,7 @@ export class PaymentComponent {
     request.subscribe({
       next: (booking) => {
         this.booking = booking;
-        this.loading = false;
+        this.preparePaymentLinks();
       },
       error: () => {
         this.loading = false;
@@ -99,80 +200,114 @@ export class PaymentComponent {
     });
   }
 
-  async payNow(): Promise<void> {
+  private preparePaymentLinks(): void {
     if (!this.booking) {
+      this.loading = false;
       return;
     }
-    this.loading = true;
+
     this.error = '';
-    try {
-      await this.paymentService.loadRazorpayScript();
-      this.paymentService.createOrder(this.bookingId, this.guestPhone || undefined).subscribe({
-        next: (order) => {
-          const options = {
-            key: order.razorpayKeyId,
-            amount: order.amount,
-            currency: order.currency,
-            name: 'Wilderness Stays',
-            description: `Booking ${this.booking?.booking_ref}`,
-            order_id: order.orderId,
-            handler: (response: any) => {
-              this.verifyPayment(
-                order.orderId,
-                response.razorpay_payment_id,
-                response.razorpay_signature
-              );
-            },
-            prefill: {
-              name: this.booking?.guest_name || '',
-              email:
-                this.booking?.guest_email && this.booking.guest_email.endsWith('@auto.local')
-                  ? ''
-                  : this.booking?.guest_email || '',
-              contact: this.booking?.guest_phone || this.guestPhone || ''
-            },
-            theme: {
-              color: '#2d4a2d'
-            }
-          };
-          const rzp = new window.Razorpay(options);
-          rzp.on('payment.failed', () => {
-            this.loading = false;
-            this.error = 'Payment failed. Please try again.';
-          });
-          rzp.open();
-        },
-        error: (err) => {
-          this.loading = false;
-          this.error = err?.error?.message || 'Unable to create payment order.';
-        }
-      });
-    } catch (_e) {
+    this.successMessage = '';
+
+    if (this.booking.payment_status === 'pending_verification') {
+      this.verificationPending = true;
       this.loading = false;
-      this.error = 'Unable to load payment gateway. Check your connection.';
+      this.successMessage = 'Payment already submitted. Admin verification is pending.';
+      return;
     }
+    this.verificationPending = false;
+
+    this.paymentService.createOrder(this.bookingId, this.guestPhone || undefined).subscribe({
+      next: (order) => {
+        this.deepLinks = order.deepLinks;
+        this.upiLinks = order.upiLinks || { paytm: '', phonepe: '' };
+        this.upiIds = {
+          paytm:
+            (order.upiIds?.paytm || '').trim() ||
+            this.extractUpiId(order.deepLinks.paytm) ||
+            this.extractUpiId(order.upiLinks?.paytm),
+          phonepe:
+            (order.upiIds?.phonepe || '').trim() ||
+            this.extractUpiId(order.deepLinks.phonepe) ||
+            this.extractUpiId(order.upiLinks?.phonepe)
+        };
+        this.loading = false;
+      },
+      error: (err) => {
+        this.loading = false;
+        this.error = err?.error?.message || 'Unable to generate payment links.';
+      }
+    });
   }
 
-  private verifyPayment(orderId: string, paymentId: string, signature: string): void {
+  setSelectedMethod(method: 'paytm' | 'phonepe'): void {
+    this.selectedMethod = method;
+  }
+
+  openPaymentApp(method: 'paytm' | 'phonepe'): void {
+    this.setSelectedMethod(method);
+    const deepLink = this.deepLinks[method];
+    const upiLink = method === 'paytm' ? '' : this.upiLinks.phonepe;
+    if (!deepLink) {
+      return;
+    }
+
+    if (method === 'phonepe') {
+      window.location.href = deepLink;
+      setTimeout(() => {
+        if (upiLink) {
+          window.location.href = upiLink;
+        }
+      }, 900);
+      return;
+    }
+
+    window.location.href = deepLink;
+  }
+
+  confirmPayment(): void {
+    this.loading = true;
+    this.error = '';
+    this.successMessage = '';
     this.paymentService
       .verifyPayment({
-        razorpayOrderId: orderId,
-        razorpayPaymentId: paymentId,
-        razorpaySignature: signature,
         bookingId: this.bookingId,
+        method: this.selectedMethod,
+        transactionId: this.transactionId.trim() || undefined,
         phone: this.guestPhone || undefined
       })
       .subscribe({
-        next: () => {
+        next: (resp) => {
           this.loading = false;
-          this.router.navigate(['/receipt', this.bookingId], {
-            queryParams: this.guestPhone ? { phone: this.guestPhone } : {}
-          });
+          if (resp?.booking) {
+            this.booking = resp.booking;
+          }
+          this.verificationPending = true;
+          this.successMessage =
+            resp?.message || 'Payment submitted. Verification is pending with admin.';
         },
-        error: () => {
+        error: (err) => {
           this.loading = false;
-          this.error = 'Unable to verify payment. Please contact support.';
+          this.error = err?.error?.message || 'Unable to submit payment for verification.';
         }
       });
+  }
+
+  private extractUpiId(link?: string): string {
+    if (!link) {
+      return '';
+    }
+    const match = link.match(/[?&]pa=([^&]+)/i);
+    return match ? decodeURIComponent(match[1]) : '';
+  }
+
+  private detectDesktop(): boolean {
+    if (typeof window === 'undefined' || typeof navigator === 'undefined') {
+      return true;
+    }
+    const ua = navigator.userAgent || '';
+    const isMobileUa = /Android|iPhone|iPad|iPod|Windows Phone|Mobile/i.test(ua);
+    const smallScreen = window.innerWidth < 992;
+    return !isMobileUa && !smallScreen;
   }
 }

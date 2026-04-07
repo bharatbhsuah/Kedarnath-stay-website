@@ -24,64 +24,66 @@ interface AdminUser {
   selector: 'app-manage-users',
   standalone: false,
   template: `
-    <h1 class="font-heading text-2xl mb-4">User Master (Role-wise)</h1>
-    <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
-      <div class="flex items-center gap-2 text-sm">
+    <section class="space-y-4">
+      <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+        <div>
+          <h1 class="font-heading text-2xl">User Master</h1>
+          <p class="text-sm text-muted mt-1">Users grouped by role with hotel assignment.</p>
+        </div>
+        <a routerLink="/admin/users/new" class="btn-primary text-xs">Add User</a>
+      </div>
+
+      <div class="card p-4 flex items-center gap-2 text-sm max-w-md">
         <label class="text-xs uppercase tracking-widest text-muted">Hotel</label>
-        <select class="text-sm" [(ngModel)]="selectedHotelId" (change)="load()">
+        <select class="text-sm flex-1" [(ngModel)]="selectedHotelId" (change)="load()">
           <option [ngValue]="null">All</option>
           <option *ngFor="let h of hotels" [ngValue]="h.id">{{ h.name }}</option>
         </select>
       </div>
-      <a routerLink="/admin/users/new" class="btn-primary text-xs">Add User</a>
-    </div>
-    <div *ngIf="errorMessage" class="mb-4 rounded-md border border-red-300 bg-red-50 px-3 py-2 text-sm text-red-700">
-      {{ errorMessage }}
-    </div>
-    <app-loading-spinner [show]="loading"></app-loading-spinner>
-    <div *ngIf="!loading">
-      <div *ngIf="groupedUsers.length === 0" class="text-sm text-muted">
+
+      <div *ngIf="errorMessage" class="rounded-md border border-red-300 bg-red-50 px-3 py-2 text-sm text-red-700">
+        {{ errorMessage }}
+      </div>
+
+      <app-loading-spinner [show]="loading"></app-loading-spinner>
+
+      <div *ngIf="!loading && groupedUsers.length === 0" class="card p-6 text-sm text-muted">
         No users found for selected filter.
       </div>
-      <div *ngFor="let group of groupedUsers" class="mb-6">
-        <h2 class="font-semibold mb-2 text-sm uppercase tracking-widest">
-          {{ group.role | titlecase }}
-        </h2>
+
+      <div *ngFor="let group of groupedUsers" class="card p-3 sm:p-4">
+        <h2 class="font-semibold mb-3 text-sm uppercase tracking-widest">{{ group.role | titlecase }}</h2>
         <div class="overflow-x-auto">
-          <table class="min-w-full text-sm border border-sand">
-            <thead class="bg-sand text-xs uppercase tracking-widest">
+          <table>
+            <thead>
               <tr>
-                <th class="px-3 py-2 text-left">ID</th>
-                <th class="px-3 py-2 text-left">Name</th>
-                <th class="px-3 py-2 text-left">Phone</th>
-                <th class="px-3 py-2 text-left">Email</th>
-                <th class="px-3 py-2 text-left">Hotel</th>
-                <th class="px-3 py-2 text-left">Actions</th>
+                <th>ID</th>
+                <th>Name</th>
+                <th>Phone</th>
+                <th>Email</th>
+                <th>Hotel</th>
+                <th>Actions</th>
               </tr>
             </thead>
             <tbody>
-              <tr *ngFor="let u of group.users" class="border-t border-sand">
-                <td class="px-3 py-2">{{ u.id }}</td>
-                <td class="px-3 py-2">{{ u.name }}</td>
-                <td class="px-3 py-2">{{ u.phone || '–' }}</td>
-                <td class="px-3 py-2">{{ u.email }}</td>
-                <td class="px-3 py-2">{{ u.hotel_name || '–' }}</td>
-                <td class="px-3 py-2 space-x-2">
-                  <a
-                    [routerLink]="['/admin/users', u.id, 'edit']"
-                    class="btn-primary text-xs inline-block"
-                    >Edit</a
-                  >
-                  <button class="btn-primary text-xs" (click)="delete(u)">
-                    Delete
-                  </button>
+              <tr *ngFor="let u of group.users">
+                <td>{{ u.id }}</td>
+                <td class="font-medium">{{ u.name }}</td>
+                <td>{{ u.phone || '-' }}</td>
+                <td>{{ u.email }}</td>
+                <td>{{ u.hotel_name || '-' }}</td>
+                <td>
+                  <div class="admin-actions">
+                    <a [routerLink]="['/admin/users', u.id, 'edit']" class="btn-secondary text-xs">Edit</a>
+                    <button class="btn-danger text-xs" (click)="delete(u)">Delete</button>
+                  </div>
                 </td>
               </tr>
             </tbody>
           </table>
         </div>
       </div>
-    </div>
+    </section>
   `
 })
 export class ManageUsersComponent {
@@ -128,8 +130,8 @@ export class ManageUsersComponent {
 
   groupUsersByRole(): void {
     const groups = new Map<string, AdminUser[]>();
-    
-    this.users.forEach(user => {
+
+    this.users.forEach((user) => {
       const role = user.role || 'unknown';
       if (!groups.has(role)) {
         groups.set(role, []);
@@ -155,4 +157,3 @@ export class ManageUsersComponent {
     });
   }
 }
-

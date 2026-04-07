@@ -23,7 +23,7 @@ function handleUpload(maxCount) {
   };
 }
 
-router.get('/dashboard', requireAdmin, adminController.getDashboard);
+router.get('/dashboard', requireAdminOrHotelAdmin, adminController.getDashboard);
 
 // Hotel master (super admin only)
 router.get('/hotels', requireAdmin, adminController.listHotels);
@@ -56,8 +56,9 @@ router.delete('/tents/:id/images/:imageId', requireAdminOrHotelAdmin, adminContr
 router.put('/tents/:id/images/:imageId/primary', requireAdminOrHotelAdmin, adminController.setPrimaryTentImage);
 
 // Other admin-only sections
-router.get('/bookings', requireAdmin, adminController.listAdminBookings);
+router.get('/bookings', requireAdminOrHotelAdmin, adminController.listAdminBookings);
 router.put('/bookings/:id/status', requireAdmin, adminController.updateBookingStatus);
+router.put('/bookings/:id/approve-payment', requireAdmin, adminController.approveBookingPayment);
 
 router.get('/price-settings', requireAdmin, adminController.listPriceSettings);
 router.post('/price-settings', requireAdmin, adminController.createPriceSetting);
