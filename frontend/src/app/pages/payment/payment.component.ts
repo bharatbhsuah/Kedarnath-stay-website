@@ -2,6 +2,7 @@ import { Component } from '@angular/core';
 import { ActivatedRoute } from '@angular/router';
 import { BookingService, Booking } from '../../core/services/booking.service';
 import { PaymentService } from '../../core/services/payment.service';
+import { ToastService } from '../../core/services/toast.service';
 
 @Component({
   selector: 'app-payment',
@@ -97,6 +98,7 @@ import { PaymentService } from '../../core/services/payment.service';
                 class="btn-primary text-center"
                 (click)="openPaymentApp('paytm')"
                 [disabled]="!deepLinks.paytm || loading"
+                [class.btn-loading]="loading"
               >
                 Pay with Paytm ({{ booking.registration_amount | currencyInr }})
               </button>
@@ -105,6 +107,7 @@ import { PaymentService } from '../../core/services/payment.service';
                 class="btn-secondary text-center"
                 (click)="openPaymentApp('phonepe')"
                 [disabled]="!deepLinks.phonepe || loading"
+                [class.btn-loading]="loading"
               >
                 Pay with PhonePe ({{ booking.registration_amount | currencyInr }})
               </button>
@@ -112,8 +115,8 @@ import { PaymentService } from '../../core/services/payment.service';
           </ng-template>
 
           <div class="mt-3" *ngIf="!verificationPending">
-            <button class="btn-primary w-full" (click)="confirmPayment()" [disabled]="loading">
-              I Have Completed Payment
+            <button class="btn-primary w-full" (click)="confirmPayment()" [disabled]="loading" [class.btn-loading]="loading">
+              I Have Completed Payment ({{ booking.registration_amount | currencyInr }})
             </button>
           </div>
           <div class="text-xs text-muted mt-2">
@@ -129,6 +132,14 @@ import { PaymentService } from '../../core/services/payment.service';
             />
           </div>
           <div class="text-xs text-red-600 mt-2" *ngIf="error">{{ error }}</div>
+
+          <div *ngIf="showGeneratedCredentials" class="mt-5 rounded-md border border-emerald-300 bg-emerald-50 px-3 py-3 text-sm">
+          <div class="font-semibold text-emerald-900">Your account has been created</div>
+          <div class="text-emerald-900 mt-1">Login ID (Phone): <span class="font-semibold">{{ generatedLoginId }}</span></div>
+          <div class="text-emerald-900 mt-1">Password: <span class="font-semibold">{{ generatedPassword }}</span></div>
+          <div class="text-emerald-900 mt-1"><span class="font-semibold">You are successfully logged in.</span></div>
+          <div class="text-emerald-900 mt-1"><span class="font-semibold" style="color:red">If your payment fails, then click on my bookings menu.</span></div>
+          </div>
         </div>
       </div>
     </section>
@@ -148,6 +159,9 @@ export class PaymentComponent {
   upiIds: { paytm: string; phonepe: string } = { paytm: '', phonepe: '' };
   verificationPending = false;
   isDesktop = true;
+  generatedLoginId = '';
+  generatedPassword = '';
+  showGeneratedCredentials = false;
   paytmQrPath = 'assets/payments/paytm-qr.png';
   phonepeQrPath = 'assets/payments/phonepe-qr.png';
   selectedMethod: 'paytm' | 'phonepe' | 'upi' = 'upi';
@@ -157,7 +171,8 @@ export class PaymentComponent {
   constructor(
     private route: ActivatedRoute,
     private bookingService: BookingService,
-    private paymentService: PaymentService
+    private paymentService: PaymentService,
+    private toast: ToastService
   ) {
     this.isDesktop = this.detectDesktop();
     this.route.paramMap.subscribe((params) => {
@@ -179,7 +194,33 @@ export class PaymentComponent {
     if (!this.routeParamsReady || !this.queryParamsReady || !this.bookingId) {
       return;
     }
+    this.resolveGeneratedCredentials();
     this.loadBooking();
+  }
+
+  private resolveGeneratedCredentials(): void {
+    const stateCredentials =
+      typeof window !== 'undefined' ? window.history.state?.generatedCredentials : null;
+    const storedCredentialsRaw =
+      typeof sessionStorage !== 'undefined'
+        ? sessionStorage.getItem(`generated_credentials_${this.bookingId}`)
+        : null;
+
+    let storedCredentials: { loginId?: string; password?: string } | null = null;
+    if (storedCredentialsRaw) {
+      try {
+        storedCredentials = JSON.parse(storedCredentialsRaw);
+      } catch {
+        storedCredentials = null;
+      }
+    }
+
+    const loginId = (stateCredentials?.loginId || storedCredentials?.loginId || '').trim();
+    const password = (stateCredentials?.password || storedCredentials?.password || '').trim();
+
+    this.generatedLoginId = loginId;
+    this.generatedPassword = password;
+    this.showGeneratedCredentials = !!(loginId && password);
   }
 
   private loadBooking(): void {
@@ -285,10 +326,12 @@ export class PaymentComponent {
           this.verificationPending = true;
           this.successMessage =
             resp?.message || 'Payment submitted. Verification is pending with admin.';
+          this.toast.success(this.successMessage);
         },
         error: (err) => {
           this.loading = false;
           this.error = err?.error?.message || 'Unable to submit payment for verification.';
+          this.toast.error(this.error);
         }
       });
   }

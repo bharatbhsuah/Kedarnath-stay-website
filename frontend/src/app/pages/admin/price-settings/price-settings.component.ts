@@ -4,6 +4,7 @@ import { ReactiveFormsModule, FormBuilder, Validators } from '@angular/forms';
 import { HttpClient } from '@angular/common/http';
 import { LoadingSpinnerComponent } from '../../../shared/components/loading-spinner/loading-spinner.component';
 import { environment } from '../../../../environments/environment';
+import { ToastService } from '../../../core/services/toast.service';
 
 interface PriceSetting {
   id: number;
@@ -51,8 +52,8 @@ interface PriceSetting {
                   <td>{{ s.tax_percent }}</td>
                   <td>
                     <div class="admin-actions">
-                      <button class="btn-secondary text-xs" (click)="editSetting(s)">Edit</button>
-                      <button class="btn-danger text-xs" (click)="deleteSetting(s)">Delete</button>
+                      <button class="btn-secondary text-xs" (click)="editSetting(s)" [disabled]="loading">Edit</button>
+                      <button class="btn-danger text-xs" (click)="deleteSetting(s)" [disabled]="deletingSettingId === s.id" [class.btn-loading]="deletingSettingId === s.id">Delete</button>
                     </div>
                   </td>
                 </tr>
@@ -95,7 +96,7 @@ interface PriceSetting {
               <label class="block text-xs uppercase mb-1 tracking-widest text-muted">Tax %</label>
               <input type="number" min="0" formControlName="tax_percent" />
             </div>
-            <button class="btn-primary w-full mt-2" type="submit">{{ editing ? 'Update Rule' : 'Create Rule' }}</button>
+            <button class="btn-primary w-full mt-2" type="submit" [disabled]="loading" [class.btn-loading]="loading">{{ editing ? 'Update Rule' : 'Create Rule' }}</button>
             <div class="text-xs text-red-600" *ngIf="error">{{ error }}</div>
           </form>
         </div>
@@ -108,19 +109,21 @@ export class PriceSettingsComponent {
   loading = false;
   editing: PriceSetting | null = null;
   error = '';
+  deletingSettingId: number | null = null;
 
   form = this.fb.group({
     property_type: ['room', Validators.required],
-    property_id: [1, Validators.required],
+    property_id: [1, [Validators.required, Validators.min(1)]],
     season: ['all', Validators.required],
-    price_per_night: [0, Validators.required],
-    weekend_surcharge: [0],
-    tax_percent: [18]
+    price_per_night: [0, [Validators.required, Validators.min(0)]],
+    weekend_surcharge: [0, [Validators.min(0)]],
+    tax_percent: [18, [Validators.min(0), Validators.max(100)]]
   });
 
   constructor(
     private http: HttpClient,
-    private fb: FormBuilder
+    private fb: FormBuilder,
+    private toast: ToastService
   ) {
     this.load();
   }
@@ -147,9 +150,17 @@ export class PriceSettingsComponent {
     if (!confirm('Delete this price rule?')) {
       return;
     }
+    this.deletingSettingId = s.id;
     this.http.delete(`${environment.apiUrl}/admin/price-settings/${s.id}`).subscribe({
-      next: () => this.load(),
-      error: () => {}
+      next: () => {
+        this.deletingSettingId = null;
+        this.toast.success('Price rule deleted.');
+        this.load();
+      },
+      error: () => {
+        this.deletingSettingId = null;
+        this.toast.error('Unable to delete rule.');
+      }
     });
   }
 
@@ -159,12 +170,15 @@ export class PriceSettingsComponent {
       return;
     }
     this.error = '';
+    this.loading = true;
     const payload = this.form.value;
     const req = this.editing
       ? this.http.put(`${environment.apiUrl}/admin/price-settings/${this.editing.id}`, payload)
       : this.http.post(`${environment.apiUrl}/admin/price-settings`, payload);
     req.subscribe({
       next: () => {
+        this.loading = false;
+        this.toast.success(this.editing ? 'Price rule updated.' : 'Price rule created.');
         this.editing = null;
         this.form.reset({
           property_type: 'room',
@@ -177,7 +191,9 @@ export class PriceSettingsComponent {
         this.load();
       },
       error: () => {
+        this.loading = false;
         this.error = 'Unable to save rule.';
+        this.toast.error(this.error);
       }
     });
   }

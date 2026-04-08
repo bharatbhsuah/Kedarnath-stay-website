@@ -8,6 +8,7 @@ import { TentService } from '../../../core/services/tent.service';
 import { PropertyImage } from '../../../core/services/room.service';
 import { environment } from '../../../../environments/environment';
 import { AuthService } from '../../../core/services/auth.service';
+import { ToastService } from '../../../core/services/toast.service';
 
 const MAX_IMAGES = 4;
 
@@ -72,6 +73,9 @@ interface AdminHotelOption {
           <div>
             <label class="block text-xs uppercase mb-1 tracking-widest">Capacity</label>
             <input type="number" min="1" formControlName="capacity" />
+            <div class="text-xs text-red-600" *ngIf="submitted && form.get('capacity')?.invalid">
+              Capacity must be at least 1.
+            </div>
           </div>
           <div>
             <label class="block text-xs uppercase mb-1 tracking-widest">Registration Amount</label>
@@ -95,7 +99,7 @@ interface AdminHotelOption {
         <div>
           <label class="block text-xs uppercase mb-1 tracking-widest">Amenities</label>
           <div formArrayName="amenities" class="space-y-1">
-            <div *ngFor="let ctrl of amenities.controls; let i = index" class="flex gap-2">
+            <div *ngFor="let ctrl of amenities.controls; let i = index" class="flex flex-col sm:flex-row gap-2">
               <input type="text" [formControlName]="i" class="flex-1" />
               <button type="button" class="btn-primary text-xs" (click)="removeAmenity(i)">
                 Remove
@@ -120,21 +124,21 @@ interface AdminHotelOption {
             <div *ngFor="let img of tentImages" class="relative group">
               <img [src]="img.url" alt="Tent" class="w-24 h-24 object-cover rounded-button border border-sand/60" />
               <div class="absolute inset-0 flex flex-col justify-center items-center gap-1 rounded-button bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity">
-                <button type="button" class="btn-primary text-xs py-1" (click)="setPrimary(img.id)" *ngIf="!img.isPrimary">Set primary</button>
-                <button type="button" class="text-xs py-1 px-2 bg-red-600 text-white rounded hover:bg-red-700" (click)="deleteImage(img.id)">Remove</button>
+                <button type="button" class="btn-primary text-xs py-1" (click)="setPrimary(img.id)" *ngIf="!img.isPrimary" [disabled]="isImageActionLoading(img.id, 'primary')" [class.btn-loading]="isImageActionLoading(img.id, 'primary')">Set primary</button>
+                <button type="button" class="text-xs py-1 px-2 bg-red-600 text-white rounded hover:bg-red-700" (click)="deleteImage(img.id)" [disabled]="isImageActionLoading(img.id, 'delete')" [class.btn-loading]="isImageActionLoading(img.id, 'delete')">Remove</button>
               </div>
               <span *ngIf="img.isPrimary" class="absolute top-1 left-1 text-xs bg-forest text-white px-1.5 py-0.5 rounded">Primary</span>
             </div>
           </div>
-          <div *ngIf="tentImages.length < MAX_IMAGES" class="flex items-center gap-2">
-            <input type="file" #fileInput accept="image/jpeg,image/png,image/webp" multiple (change)="onFileSelect($event)" class="text-sm" />
-            <button type="button" class="btn-gold text-xs" (click)="uploadImages()" [disabled]="uploadingImages || !selectedFiles.length">
+          <div *ngIf="tentImages.length < MAX_IMAGES" class="flex flex-col sm:flex-row sm:items-center gap-2">
+            <input type="file" #fileInput accept="image/jpeg,image/png,image/webp" multiple (change)="onFileSelect($event)" class="text-sm w-full sm:w-auto" />
+            <button type="button" class="btn-gold text-xs" (click)="uploadImages()" [disabled]="uploadingImages || !selectedFiles.length" [class.btn-loading]="uploadingImages">
               Upload
             </button>
           </div>
           <p class="text-xs text-red-600 mt-1" *ngIf="imageError">{{ imageError }}</p>
         </div>
-        <button class="btn-primary mt-2" type="submit" [disabled]="loading">
+        <button class="btn-primary mt-2" type="submit" [disabled]="loading" [class.btn-loading]="loading">
           {{ isEdit ? 'Update Tent' : 'Create Tent' }}
         </button>
         <div class="text-xs text-red-600" *ngIf="error">{{ error }}</div>
@@ -149,7 +153,7 @@ export class TentFormComponent {
     name: ['', Validators.required],
     type: ['standard', Validators.required],
     description: [''],
-    capacity: [2, Validators.required],
+    capacity: [2, [Validators.required, Validators.min(1)]],
     registrationAmount: [null as number | null, [Validators.required, Validators.min(0.01)]],
     arrivalAmount: [null as number | null, [Validators.required, Validators.min(0.01)]],
     amenities: this.fb.array<string>([]),
@@ -165,6 +169,7 @@ export class TentFormComponent {
   imageError = '';
   uploadingImages = false;
   selectedFiles: File[] = [];
+  activeImageActionKey: string | null = null;
   hotels: AdminHotelOption[] = [];
   isSuperAdmin = false;
 
@@ -174,27 +179,42 @@ export class TentFormComponent {
     private http: HttpClient,
     private router: Router,
     private tentService: TentService,
-    private auth: AuthService
+    private auth: AuthService,
+    private toast: ToastService
   ) {
     const user = this.auth.getCurrentUser();
     this.isSuperAdmin = !!user && user.role === 'admin';
     if (this.isSuperAdmin) {
       this.loadHotels();
-      const hotelCtrl = this.form.get('hotelId');
-      hotelCtrl?.addValidators(Validators.required);
-      hotelCtrl?.updateValueAndValidity();
     }
     this.route.paramMap.subscribe((params) => {
       const idParam = params.get('id');
-      if (idParam) {
-        this.isEdit = true;
+      this.isEdit = !!idParam;
+      this.syncHotelValidator();
+      if (this.isEdit) {
         this.id = Number(idParam);
         this.load();
+      } else {
+        this.id = null;
+        if (!this.amenities.length) {
+          this.addAmenity();
+        }
       }
     });
-    if (!this.isEdit) {
-      this.addAmenity();
+  }
+
+  private syncHotelValidator(): void {
+    const hotelCtrl = this.form.get('hotelId');
+    if (!hotelCtrl) {
+      return;
     }
+    if (this.isSuperAdmin && !this.isEdit) {
+      hotelCtrl.setValidators(Validators.required);
+    } else {
+      hotelCtrl.clearValidators();
+      hotelCtrl.setValue('');
+    }
+    hotelCtrl.updateValueAndValidity();
   }
 
   private loadHotels(): void {
@@ -221,6 +241,32 @@ export class TentFormComponent {
     this.amenities.removeAt(index);
   }
 
+  private parseAmenities(rawAmenities: unknown): string[] {
+    if (Array.isArray(rawAmenities)) {
+      return rawAmenities.map((item) => String(item).trim()).filter(Boolean);
+    }
+    if (typeof rawAmenities === 'string') {
+      const trimmed = rawAmenities.trim();
+      if (!trimmed) {
+        return [];
+      }
+      try {
+        return this.parseAmenities(JSON.parse(trimmed));
+      } catch {
+        return [trimmed];
+      }
+    }
+    return [];
+  }
+
+  private resetAmenities(values: string[]): void {
+    this.amenities.clear();
+    values.forEach((amenity) => this.amenities.push(this.fb.control(amenity)));
+    if (!values.length) {
+      this.addAmenity();
+    }
+  }
+
   private load(): void {
     if (!this.id) {
       return;
@@ -228,11 +274,8 @@ export class TentFormComponent {
     this.loading = true;
     this.tentService.getTent(this.id).subscribe({
       next: (tent) => {
-        const amenitiesArray = tent.amenities || [];
-        amenitiesArray.forEach((a: string) => this.amenities.push(this.fb.control(a)));
-        if (!amenitiesArray.length) {
-          this.addAmenity();
-        }
+        const amenitiesArray = this.parseAmenities(tent.amenities);
+        this.resetAmenities(amenitiesArray);
         this.form.patchValue({
           name: tent.name,
           type: tent.type,
@@ -269,7 +312,6 @@ export class TentFormComponent {
     this.uploadingImages = true;
     const formData = new FormData();
     this.selectedFiles.forEach((f) => formData.append('images', f));
-    console.log(formData);
     
     ;
     this.http.post<{ id: number; image_path: string; is_primary: number }[]>(`${environment.apiUrl}/admin/tents/${this.id}/images`, formData).subscribe({
@@ -278,10 +320,12 @@ export class TentFormComponent {
         this.selectedFiles = [];
         this.tentService.getTent(this.id!).subscribe((t) => (this.tentImages = t.images || []));
         this.uploadingImages = false;
+        this.toast.success('Tent images uploaded successfully.');
       },
       error: (err) => {
         this.imageError = err?.error?.message || 'Upload failed.';
         this.uploadingImages = false;
+        this.toast.error(this.imageError);
       }
     });
   }
@@ -289,12 +333,17 @@ export class TentFormComponent {
   deleteImage(imageId: number): void {
     if (!this.id) return;
     this.imageError = '';
+    this.activeImageActionKey = this.imageActionKey(imageId, 'delete');
     this.http.delete(`${environment.apiUrl}/admin/tents/${this.id}/images/${imageId}`).subscribe({
       next: () => {
+        this.activeImageActionKey = null;
         this.tentService.getTent(this.id!).subscribe((t) => (this.tentImages = t.images || []));
+        this.toast.success('Tent image deleted.');
       },
       error: (err) => {
+        this.activeImageActionKey = null;
         this.imageError = err?.error?.message || 'Delete failed.';
+        this.toast.error(this.imageError);
       }
     });
   }
@@ -302,12 +351,17 @@ export class TentFormComponent {
   setPrimary(imageId: number): void {
     if (!this.id) return;
     this.imageError = '';
+    this.activeImageActionKey = this.imageActionKey(imageId, 'primary');
     this.http.put(`${environment.apiUrl}/admin/tents/${this.id}/images/${imageId}/primary`, {}).subscribe({
       next: () => {
+        this.activeImageActionKey = null;
         this.tentService.getTent(this.id!).subscribe((t) => (this.tentImages = t.images || []));
+        this.toast.success('Primary tent image updated.');
       },
       error: (err) => {
+        this.activeImageActionKey = null;
         this.imageError = err?.error?.message || 'Set primary failed.';
+        this.toast.error(this.imageError);
       }
     });
   }
@@ -320,7 +374,7 @@ export class TentFormComponent {
     }
     const payload: any = {
       ...this.form.value,
-      amenities: this.amenities.value.filter((a: string) => !!a)
+      amenities: this.amenities.value.map((a: string) => a?.trim()).filter((a: string) => !!a)
     };
 
     if (!this.isEdit && this.isSuperAdmin) {
@@ -335,13 +389,23 @@ export class TentFormComponent {
     req.subscribe({
       next: () => {
         this.loading = false;
+        this.toast.success(this.isEdit ? 'Tent updated successfully.' : 'Tent created successfully.');
         this.router.navigate(['/admin/tents']);
       },
       error: (err) => {
         this.loading = false;
         this.error = err?.error?.message || 'Unable to save tent.';
+        this.toast.error(this.error);
       }
     });
+  }
+
+  private imageActionKey(imageId: number, action: 'delete' | 'primary'): string {
+    return `${action}:${imageId}`;
+  }
+
+  isImageActionLoading(imageId: number, action: 'delete' | 'primary'): boolean {
+    return this.activeImageActionKey === this.imageActionKey(imageId, action);
   }
 }
 

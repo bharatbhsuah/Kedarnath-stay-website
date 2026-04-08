@@ -3,6 +3,7 @@ import { NgForOf, NgIf } from '@angular/common';
 import { HttpClient, HttpParams } from '@angular/common/http';
 import { LoadingSpinnerComponent } from '../../../shared/components/loading-spinner/loading-spinner.component';
 import { environment } from '../../../../environments/environment';
+import { ToastService } from '../../../core/services/toast.service';
 
 interface AdminEnquiry {
   id: number;
@@ -27,10 +28,10 @@ interface AdminEnquiry {
 
       <div class="card p-4">
         <div class="admin-actions">
-          <button class="btn-secondary text-xs" [class.btn-primary]="filter.status === ''" (click)="setStatus('')">All</button>
-          <button class="btn-secondary text-xs" [class.btn-primary]="filter.status === 'new'" (click)="setStatus('new')">New</button>
-          <button class="btn-secondary text-xs" [class.btn-primary]="filter.status === 'read'" (click)="setStatus('read')">Read</button>
-          <button class="btn-secondary text-xs" [class.btn-primary]="filter.status === 'replied'" (click)="setStatus('replied')">Replied</button>
+          <button class="btn-secondary text-xs" [class.btn-primary]="filter.status === ''" (click)="setStatus('')" [disabled]="loading" [class.btn-loading]="loading && filter.status === ''">All</button>
+          <button class="btn-secondary text-xs" [class.btn-primary]="filter.status === 'new'" (click)="setStatus('new')" [disabled]="loading" [class.btn-loading]="loading && filter.status === 'new'">New</button>
+          <button class="btn-secondary text-xs" [class.btn-primary]="filter.status === 'read'" (click)="setStatus('read')" [disabled]="loading" [class.btn-loading]="loading && filter.status === 'read'">Read</button>
+          <button class="btn-secondary text-xs" [class.btn-primary]="filter.status === 'replied'" (click)="setStatus('replied')" [disabled]="loading" [class.btn-loading]="loading && filter.status === 'replied'">Replied</button>
         </div>
       </div>
 
@@ -73,13 +74,13 @@ interface AdminEnquiry {
                 <td>{{ formatDateTime(e.created_at) }}</td>
                 <td>
                   <div class="admin-actions">
-                    <button class="btn-secondary text-xs" (click)="updateStatus(e, 'read')" *ngIf="e.status === 'new'">
+                    <button class="btn-secondary text-xs" (click)="updateStatus(e, 'read')" *ngIf="e.status === 'new'" [disabled]="isActionLoading(e.id, 'read')" [class.btn-loading]="isActionLoading(e.id, 'read')">
                       Mark Read
                     </button>
-                    <button class="btn-primary text-xs" (click)="updateStatus(e, 'replied')" *ngIf="e.status !== 'replied'">
+                    <button class="btn-primary text-xs" (click)="updateStatus(e, 'replied')" *ngIf="e.status !== 'replied'" [disabled]="isActionLoading(e.id, 'replied')" [class.btn-loading]="isActionLoading(e.id, 'replied')">
                       Mark Replied
                     </button>
-                    <button class="btn-danger text-xs" (click)="delete(e)">Delete</button>
+                    <button class="btn-danger text-xs" (click)="delete(e)" [disabled]="isActionLoading(e.id, 'delete')" [class.btn-loading]="isActionLoading(e.id, 'delete')">Delete</button>
                   </div>
                 </td>
               </tr>
@@ -93,6 +94,7 @@ interface AdminEnquiry {
 export class EnquiriesListComponent {
   enquiries: AdminEnquiry[] = [];
   loading = false;
+  activeActionKey: string | null = null;
   filter: { status: string } = { status: '' };
   private readonly dateTimeFormatter = new Intl.DateTimeFormat('en-IN', {
     day: '2-digit',
@@ -102,7 +104,7 @@ export class EnquiriesListComponent {
     minute: '2-digit'
   });
 
-  constructor(private http: HttpClient) {
+  constructor(private http: HttpClient, private toast: ToastService) {
     this.load();
   }
 
@@ -131,11 +133,19 @@ export class EnquiriesListComponent {
   }
 
   updateStatus(e: AdminEnquiry, status: string): void {
+    this.activeActionKey = this.actionKey(e.id, status);
     this.http
       .put(`${environment.apiUrl}/admin/enquiries/${e.id}/status`, { status })
       .subscribe({
-        next: () => this.load(),
-        error: () => {}
+        next: () => {
+          this.activeActionKey = null;
+          this.toast.success('Enquiry updated.');
+          this.load();
+        },
+        error: () => {
+          this.activeActionKey = null;
+          this.toast.error('Unable to update enquiry.');
+        }
       });
   }
 
@@ -143,10 +153,26 @@ export class EnquiriesListComponent {
     if (!confirm('Delete this enquiry?')) {
       return;
     }
+    this.activeActionKey = this.actionKey(e.id, 'delete');
     this.http.delete(`${environment.apiUrl}/admin/enquiries/${e.id}`).subscribe({
-      next: () => this.load(),
-      error: () => {}
+      next: () => {
+        this.activeActionKey = null;
+        this.toast.success('Enquiry deleted.');
+        this.load();
+      },
+      error: () => {
+        this.activeActionKey = null;
+        this.toast.error('Unable to delete enquiry.');
+      }
     });
+  }
+
+  private actionKey(id: number, action: string): string {
+    return `${action}:${id}`;
+  }
+
+  isActionLoading(id: number, action: string): boolean {
+    return this.activeActionKey === this.actionKey(id, action);
   }
 
   formatDateTime(value: string): string {

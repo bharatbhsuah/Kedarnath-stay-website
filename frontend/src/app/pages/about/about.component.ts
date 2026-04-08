@@ -12,9 +12,9 @@ interface HelplineNumber {
   template: `
     <section class="max-w-5xl mx-auto px-4 sm:px-6 py-10 sm:py-14 space-y-8">
       <div>
-        <h1 class="font-heading text-3xl sm:text-4xl text-dark mb-3">About Us</h1>
+        <h1 class="font-heading text-3xl sm:text-4xl text-dark mb-3">Contact Us</h1>
         <p class="text-muted leading-relaxed">
-          Wilderness Stays helps travellers discover and book curated rooms and luxury tents with
+          Kedar-Stays helps travellers discover and book curated rooms and luxury tents with
           a simple booking flow, secure online payments, and real-time confirmation updates.
         </p>
       </div>

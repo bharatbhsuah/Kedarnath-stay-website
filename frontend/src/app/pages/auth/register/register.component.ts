@@ -4,6 +4,7 @@ import { NgIf } from '@angular/common';
 import { Router, RouterLink } from '@angular/router';
 import { AuthService } from '../../../core/services/auth.service';
 import { LoadingSpinnerComponent } from '../../../shared/components/loading-spinner/loading-spinner.component';
+import { ToastService } from '../../../core/services/toast.service';
 
 @Component({
  
@@ -34,7 +35,7 @@ import { LoadingSpinnerComponent } from '../../../shared/components/loading-spin
           <label class="block text-xs uppercase mb-1.5 tracking-widest text-muted">Phone</label>
           <input type="tel" formControlName="phone" class="w-full" />
           <div class="text-xs text-red-600 mt-1" *ngIf="submitted && form.get('phone')?.invalid">
-            Phone is required.
+            Enter a valid 10-digit mobile number.
           </div>
         </div>
         <div>
@@ -44,7 +45,7 @@ import { LoadingSpinnerComponent } from '../../../shared/components/loading-spin
             Password must be at least 6 characters.
           </div>
         </div>
-        <button class="btn-primary w-full mt-2" type="submit" [disabled]="loading">
+        <button class="btn-primary w-full mt-2" type="submit" [disabled]="loading" [class.btn-loading]="loading">
           Register
         </button>
         <div class="text-xs text-red-600" *ngIf="error">{{ error }}</div>
@@ -59,10 +60,12 @@ import { LoadingSpinnerComponent } from '../../../shared/components/loading-spin
   `
 })
 export class RegisterComponent {
+  private readonly mobilePattern = /^[0-9]{10}$/;
+
   form = this.fb.group({
     name: ['', Validators.required],
     email: ['', [Validators.email]],
-    phone: ['', [Validators.required]],
+    phone: ['', [Validators.required, Validators.pattern(this.mobilePattern)]],
     password: ['', [Validators.required, Validators.minLength(6)]]
   });
   submitted = false;
@@ -72,7 +75,8 @@ export class RegisterComponent {
   constructor(
     private fb: FormBuilder,
     private auth: AuthService,
-    private router: Router
+    private router: Router,
+    private toast: ToastService
   ) {}
 
   register(): void {
@@ -103,11 +107,13 @@ export class RegisterComponent {
       .subscribe({
         next: () => {
           this.loading = false;
+          this.toast.success('Registration successful.');
           this.router.navigate(['/']);
         },
         error: (err) => {
           this.loading = false;
           this.error = err?.error?.message || 'Unable to register.';
+          this.toast.error(this.error);
         }
       });
   }

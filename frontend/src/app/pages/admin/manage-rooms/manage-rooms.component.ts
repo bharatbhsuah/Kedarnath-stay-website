@@ -4,6 +4,7 @@ import { RouterLink } from '@angular/router';
 import { HttpClient } from '@angular/common/http';
 import { LoadingSpinnerComponent } from '../../../shared/components/loading-spinner/loading-spinner.component';
 import { environment } from '../../../../environments/environment';
+import { ToastService } from '../../../core/services/toast.service';
 
 interface AdminRoom {
   id: number;
@@ -20,7 +21,7 @@ interface AdminRoom {
   selector: 'app-manage-rooms',
   template: `
     <section class="space-y-4">
-      <div class="flex justify-between items-center gap-3">
+      <div class="flex flex-wrap justify-between items-start sm:items-center gap-3">
         <div>
           <h1 class="font-heading text-2xl">Manage Rooms</h1>
           <p class="text-sm text-muted mt-1">Room inventory grouped by hotel.</p>
@@ -66,8 +67,8 @@ interface AdminRoom {
                 <td>
                   <div class="admin-actions">
                     <a [routerLink]="['/admin/rooms', r.id, 'edit']" class="btn-secondary text-xs">Edit</a>
-                    <button class="btn-gold text-xs" (click)="toggleStatus(r)">Toggle Status</button>
-                    <button class="btn-danger text-xs" (click)="delete(r)">Delete</button>
+                    <button class="btn-gold text-xs" (click)="toggleStatus(r)" [disabled]="isActionLoading(r.id, 'toggle')" [class.btn-loading]="isActionLoading(r.id, 'toggle')">Toggle Status</button>
+                    <button class="btn-danger text-xs" (click)="delete(r)" [disabled]="isActionLoading(r.id, 'delete')" [class.btn-loading]="isActionLoading(r.id, 'delete')">Delete</button>
                   </div>
                 </td>
               </tr>
@@ -82,8 +83,9 @@ export class ManageRoomsComponent {
   rooms: AdminRoom[] = [];
   groupedRooms: { hotelName: string; rooms: AdminRoom[] }[] = [];
   loading = false;
+  activeActionKey: string | null = null;
 
-  constructor(private http: HttpClient) {
+  constructor(private http: HttpClient, private toast: ToastService) {
     this.load();
   }
 
@@ -114,14 +116,19 @@ export class ManageRoomsComponent {
 
   toggleStatus(room: AdminRoom): void {
     const newStatus = room.status === 'active' ? 'inactive' : 'active';
+    this.activeActionKey = this.actionKey(room.id, 'toggle');
     this.http
-      .put<AdminRoom>(`${environment.apiUrl}/admin/rooms/${room.id}`, {
-        ...room,
-        status: newStatus
-      })
+      .put<AdminRoom>(`${environment.apiUrl}/admin/rooms/${room.id}`, { status: newStatus })
       .subscribe({
-        next: () => this.load(),
-        error: () => {}
+        next: () => {
+          this.activeActionKey = null;
+          this.toast.success('Room updated.');
+          this.load();
+        },
+        error: () => {
+          this.activeActionKey = null;
+          this.toast.error('Unable to update room status.');
+        }
       });
   }
 
@@ -129,9 +136,25 @@ export class ManageRoomsComponent {
     if (!confirm('Delete this room?')) {
       return;
     }
+    this.activeActionKey = this.actionKey(room.id, 'delete');
     this.http.delete(`${environment.apiUrl}/admin/rooms/${room.id}`).subscribe({
-      next: () => this.load(),
-      error: () => {}
+      next: () => {
+        this.activeActionKey = null;
+        this.toast.success('Room deleted.');
+        this.load();
+      },
+      error: () => {
+        this.activeActionKey = null;
+        this.toast.error('Unable to delete room.');
+      }
     });
+  }
+
+  private actionKey(id: number, action: 'toggle' | 'delete'): string {
+    return `${action}:${id}`;
+  }
+
+  isActionLoading(id: number, action: 'toggle' | 'delete'): boolean {
+    return this.activeActionKey === this.actionKey(id, action);
   }
 }

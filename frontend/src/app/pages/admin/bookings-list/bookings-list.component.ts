@@ -8,6 +8,7 @@ import { LoadingSpinnerComponent } from '../../../shared/components/loading-spin
 import { environment } from '../../../../environments/environment';
 import { CurrencyInrPipe } from '../../../shared/pipes/currency-inr.pipe';
 import { AuthService } from '../../../core/services/auth.service';
+import { ToastService } from '../../../core/services/toast.service';
 
 interface AdminBooking {
   id: number;
@@ -43,7 +44,7 @@ interface AdminHotel {
           <h1 class="font-heading text-2xl">Bookings</h1>
           <p class="text-sm text-muted mt-1">Enterprise booking operations with payment verification controls.</p>
         </div>
-        <button class="btn-secondary text-xs" (click)="load()" [disabled]="loading">Refresh</button>
+        <button class="btn-secondary text-xs" (click)="load()" [disabled]="loading" [class.btn-loading]="loading">Refresh</button>
       </div>
 
       <div class="card p-4 sm:p-5 text-sm">
@@ -119,8 +120,8 @@ interface AdminHotel {
         </div>
 
         <div class="mt-4 admin-actions">
-          <button class="btn-primary text-xs" (click)="load()" [disabled]="loading">Apply Filters</button>
-          <button class="btn-tertiary text-xs" (click)="resetFilters()" [disabled]="loading">Reset</button>
+          <button class="btn-primary text-xs" (click)="load()" [disabled]="loading" [class.btn-loading]="loading">Apply Filters</button>
+          <button class="btn-tertiary text-xs" (click)="resetFilters()" [disabled]="loading" [class.btn-loading]="loading">Reset</button>
         </div>
       </div>
 
@@ -182,6 +183,7 @@ interface AdminHotel {
                     <select
                       class="text-xs"
                       [value]="b.status"
+                      [disabled]="updatingBookingId === b.id || approvingBookingId === b.id"
                       (change)="updateStatus(b, $any($event.target).value)"
                     >
                       <option value="pending">Pending</option>
@@ -197,6 +199,8 @@ interface AdminHotel {
                       class="btn-success text-xs"
                       *ngIf="b.payment_status === 'pending_verification'"
                       (click)="approvePayment(b)"
+                      [disabled]="approvingBookingId === b.id"
+                      [class.btn-loading]="approvingBookingId === b.id"
                     >
                       Approve Payment
                     </button>
@@ -215,6 +219,8 @@ export class BookingsListComponent {
   hotels: AdminHotel[] = [];
   loading = false;
   isHotelAdmin = false;
+  updatingBookingId: number | null = null;
+  approvingBookingId: number | null = null;
 
   filter = {
     status: '',
@@ -234,7 +240,7 @@ export class BookingsListComponent {
     year: 'numeric'
   });
 
-  constructor(private http: HttpClient, private auth: AuthService) {
+  constructor(private http: HttpClient, private auth: AuthService, private toast: ToastService) {
     const user = this.auth.getCurrentUser();
     this.isHotelAdmin = user?.role === 'hotel-admin';
     if (this.isHotelAdmin) {
@@ -303,9 +309,20 @@ export class BookingsListComponent {
   }
 
   updateStatus(b: AdminBooking, status: string): void {
+    this.updatingBookingId = b.id;
     this.http
       .put(`${environment.apiUrl}/admin/bookings/${b.id}/status`, { status })
-      .subscribe(() => this.load());
+      .subscribe({
+        next: () => {
+          this.updatingBookingId = null;
+          this.toast.success('Booking updated.');
+          this.load();
+        },
+        error: () => {
+          this.updatingBookingId = null;
+          this.toast.error('Unable to update booking status.');
+        }
+      });
   }
 
   approvePayment(b: AdminBooking): void {
@@ -315,9 +332,20 @@ export class BookingsListComponent {
     if (!ok) {
       return;
     }
+    this.approvingBookingId = b.id;
     this.http
       .put(`${environment.apiUrl}/admin/bookings/${b.id}/approve-payment`, {})
-      .subscribe(() => this.load());
+      .subscribe({
+        next: () => {
+          this.approvingBookingId = null;
+          this.toast.success('Payment approved successfully.');
+          this.load();
+        },
+        error: () => {
+          this.approvingBookingId = null;
+          this.toast.error('Unable to approve payment.');
+        }
+      });
   }
 
   formatDateRange(checkIn: string, checkOut: string): string {

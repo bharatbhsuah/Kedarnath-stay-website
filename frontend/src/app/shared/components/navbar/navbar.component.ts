@@ -17,9 +17,9 @@ interface NavLink {
     <header class="site-nav">
       <div class="site-nav__bar max-w-6xl mx-auto px-4 sm:px-6">
         <a routerLink="/" class="site-nav__brand" (click)="menuOpen = false">
-          <span class="site-nav__brand-mark" aria-hidden="true">WS</span>
+          <span class="site-nav__brand-mark" aria-hidden="true">KS</span>
           <span>
-            <span class="site-nav__brand-title">Wilderness Stays</span>
+            <span class="site-nav__brand-title">Kedar-Stays</span>
             <span class="site-nav__brand-tag">Curated mountain rooms and tents</span>
           </span>
         </a>
@@ -98,7 +98,7 @@ export class NavbarComponent {
     { label: 'Home', route: '/', tone: 'stay' },
     { label: 'Rooms', route: '/rooms', tone: 'stay' },
     { label: 'Tents', route: '/tents', tone: 'stay' },
-    { label: 'About Us', route: '/about', tone: 'support' },
+    { label: 'Contact Us', route: '/about', tone: 'support' },
     { label: 'Enquiry', route: '/enquiry', tone: 'support' },
     { label: 'My Bookings', route: '/my-bookings', tone: 'account', requiresAuth: true },
     { label: 'Admin', route: '/admin/dashboard', tone: 'admin', requiresAdmin: true }

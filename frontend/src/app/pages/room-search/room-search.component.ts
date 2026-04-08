@@ -52,7 +52,7 @@ import { LoadingSpinnerComponent } from '../../shared/components/loading-spinner
             </label>
           </div>
         </div>
-        <button class="btn-primary w-full mt-3" (click)="applyFilters()">Apply Filters</button>
+        <button class="btn-primary w-full mt-3" (click)="applyFilters()" [disabled]="loading" [class.btn-loading]="loading">Apply Filters</button>
       </aside>
 
       <div class="min-w-0">

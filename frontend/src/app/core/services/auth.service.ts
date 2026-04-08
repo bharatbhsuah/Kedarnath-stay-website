@@ -27,6 +27,15 @@ interface PhoneLoginResponse {
   email: string | null;
 }
 
+export interface PhoneLoginResult {
+  user: User;
+  exists: boolean;
+  generatedCredentials?: {
+    loginId: string;
+    password: string;
+  };
+}
+
 @Injectable({ providedIn: 'root' })
 export class AuthService {
   private readonly tokenKey = 'auth_token';
@@ -56,20 +65,32 @@ export class AuthService {
       );
   }
 
-  phoneLogin(payload: { phone: string; name: string; email?: string }): Observable<User> {
+  phoneLogin(payload: { phone: string; name: string; email?: string }): Observable<PhoneLoginResult> {
     return this.http
       .post<PhoneLoginResponse>(`${environment.apiUrl}/auth/phone-login`, payload)
       .pipe(
         tap((res) => this.setToken(res.token)),
-        map((res) => ({
-          id: Number(res.guest_id),
-          guest_id: res.guest_id,
-          name: res.name,
-          phone: res.phone,
-          email: res.email,
-          role: 'customer' as const,
-          hotelId: null
-        }))
+        map((res) => {
+          const user: User = {
+            id: Number(res.guest_id),
+            guest_id: res.guest_id,
+            name: res.name,
+            phone: res.phone,
+            email: res.email,
+            role: 'customer',
+            hotelId: null
+          };
+          return {
+            user,
+            exists: res.exists,
+            generatedCredentials: res.exists
+              ? undefined
+              : {
+                  loginId: res.phone,
+                  password: `${res.phone}@pass`
+                }
+          };
+        })
       );
   }
 

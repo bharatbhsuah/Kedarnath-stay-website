@@ -5,6 +5,7 @@ import { HttpClient } from '@angular/common/http';
 import { FormsModule, ReactiveFormsModule, FormBuilder, FormGroup, Validators } from '@angular/forms';
 import { LoadingSpinnerComponent } from '../../../shared/components/loading-spinner/loading-spinner.component';
 import { environment } from '../../../../environments/environment';
+import { ToastService } from '../../../core/services/toast.service';
 
 interface PromoCode {
   id: number;
@@ -33,15 +34,15 @@ interface Agent {
 
   template: `
     <div class="space-y-6">
-      <div class="flex justify-between items-center">
+      <div class="flex flex-wrap justify-between items-start sm:items-center gap-3">
         <h1 class="font-heading text-2xl">Promo Code Master</h1>
-        <button (click)="showCreateForm = !showCreateForm" class="btn-primary text-sm">
+        <button (click)="showCreateForm = !showCreateForm" class="btn-primary text-sm" [disabled]="loading">
           {{ showCreateForm ? 'Cancel' : 'Create Promo Code' }}
         </button>
       </div>
 
       <!-- Create/Edit Form -->
-      <div *ngIf="showCreateForm" class="bg-white p-6 rounded-lg border border-sand">
+      <div *ngIf="showCreateForm" class="bg-white p-4 sm:p-6 rounded-lg border border-sand">
         <h2 class="font-semibold text-lg mb-4">{{ editingPromoCode ? 'Edit Promo Code' : 'Create New Promo Code' }}</h2>
         <form [formGroup]="promoCodeForm" (ngSubmit)="onSubmit()" class="space-y-4">
           <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -54,7 +55,7 @@ interface Agent {
                 placeholder="e.g., SAVE10"
               >
               <div *ngIf="promoCodeForm.get('code')?.invalid && promoCodeForm.get('code')?.touched" class="text-red-500 text-xs mt-1">
-                Promo code is required
+                Promo code is required (letters, numbers, "_" or "-" only)
               </div>
             </div>
             
@@ -121,11 +122,11 @@ interface Agent {
             </div>
           </div>
           
-          <div class="flex gap-2">
-            <button type="submit" class="btn-primary" [disabled]="promoCodeForm.invalid || loading">
+          <div class="flex flex-wrap gap-2">
+            <button type="submit" class="btn-primary" [disabled]="promoCodeForm.invalid || savingPromo" [class.btn-loading]="savingPromo">
               {{ editingPromoCode ? 'Update' : 'Create' }}
             </button>
-            <button type="button" (click)="resetForm()" class="btn-secondary">
+            <button type="button" (click)="resetForm()" class="btn-secondary" [disabled]="savingPromo">
               Cancel
             </button>
           </div>
@@ -179,10 +180,10 @@ interface Agent {
                 </td>
                 <td>
                   <div class="admin-actions">
-                    <button (click)="editPromoCode(promo)" class="btn-secondary text-xs">
+                    <button (click)="editPromoCode(promo)" class="btn-secondary text-xs" [disabled]="loading || deletingPromoId === promo.id">
                       Edit
                     </button>
-                    <button (click)="deletePromoCode(promo)" class="btn-danger text-xs">
+                    <button (click)="deletePromoCode(promo)" class="btn-danger text-xs" [disabled]="deletingPromoId === promo.id" [class.btn-loading]="deletingPromoId === promo.id">
                       Delete
                     </button>
                   </div>
@@ -199,6 +200,8 @@ export class PromoCodeMasterComponent implements OnInit {
   promoCodes: PromoCode[] = [];
   agents: Agent[] = [];
   loading = false;
+  savingPromo = false;
+  deletingPromoId: number | null = null;
   showCreateForm = false;
   editingPromoCode: PromoCode | null = null;
   
@@ -206,15 +209,16 @@ export class PromoCodeMasterComponent implements OnInit {
 
   constructor(
     private http: HttpClient,
-    private fb: FormBuilder
+    private fb: FormBuilder,
+    private toast: ToastService
   ) {
     this.promoCodeForm = this.fb.group({
-      code: ['', Validators.required],
+      code: ['', [Validators.required, Validators.pattern(/^[A-Za-z0-9_-]+$/)]],
       agent_id: ['', Validators.required],
       discount_percent: ['', [Validators.required, Validators.min(1), Validators.max(100)]],
-      max_uses: [0],
+      max_uses: [0, [Validators.min(0)]],
       valid_until: [''],
-      status: ['active']
+      status: ['active', Validators.required]
     });
   }
 
@@ -250,27 +254,33 @@ export class PromoCodeMasterComponent implements OnInit {
   onSubmit(): void {
     if (this.promoCodeForm.invalid) return;
 
-    this.loading = true;
+    this.savingPromo = true;
     const formData = this.promoCodeForm.value;
 
     if (this.editingPromoCode) {
       this.http.put<PromoCode>(`${environment.apiUrl}/promo-codes/${this.editingPromoCode.id}`, formData).subscribe({
         next: () => {
+          this.savingPromo = false;
+          this.toast.success('Promo code updated.');
           this.loadPromoCodes();
           this.resetForm();
         },
         error: () => {
-          this.loading = false;
+          this.savingPromo = false;
+          this.toast.error('Unable to update promo code.');
         }
       });
     } else {
       this.http.post<PromoCode>(`${environment.apiUrl}/promo-codes`, formData).subscribe({
         next: () => {
+          this.savingPromo = false;
+          this.toast.success('Promo code created.');
           this.loadPromoCodes();
           this.resetForm();
         },
         error: () => {
-          this.loading = false;
+          this.savingPromo = false;
+          this.toast.error('Unable to create promo code.');
         }
       });
     }
@@ -294,13 +304,16 @@ export class PromoCodeMasterComponent implements OnInit {
       return;
     }
 
-    this.loading = true;
+    this.deletingPromoId = promo.id;
     this.http.delete(`${environment.apiUrl}/promo-codes/${promo.id}`).subscribe({
       next: () => {
+        this.deletingPromoId = null;
+        this.toast.success('Promo code deleted.');
         this.loadPromoCodes();
       },
       error: () => {
-        this.loading = false;
+        this.deletingPromoId = null;
+        this.toast.error('Unable to delete promo code.');
       }
     });
   }

@@ -5,6 +5,7 @@ import { NgIf } from '@angular/common';
 import { HttpClient } from '@angular/common/http';
 import { LoadingSpinnerComponent } from '../../../shared/components/loading-spinner/loading-spinner.component';
 import { environment } from '../../../../environments/environment';
+import { ToastService } from '../../../core/services/toast.service';
 
 interface AdminHotel {
   id: number;
@@ -40,7 +41,7 @@ interface AdminHotel {
             <option value="inactive">Inactive</option>
           </select>
         </div>
-        <button class="btn-primary mt-2" type="submit" [disabled]="loading">
+        <button class="btn-primary mt-2" type="submit" [disabled]="loading" [class.btn-loading]="loading">
           {{ isEdit ? 'Update Hotel' : 'Create Hotel' }}
         </button>
         <div class="text-xs text-red-600" *ngIf="error">{{ error }}</div>
@@ -65,7 +66,8 @@ export class HotelFormComponent {
     private fb: FormBuilder,
     private route: ActivatedRoute,
     private http: HttpClient,
-    private router: Router
+    private router: Router,
+    private toast: ToastService
   ) {
     this.route.paramMap.subscribe((params) => {
       const idParam = params.get('id');
@@ -111,11 +113,13 @@ export class HotelFormComponent {
     req.subscribe({
       next: () => {
         this.loading = false;
+        this.toast.success(this.isEdit ? 'Hotel updated successfully.' : 'Hotel created successfully.');
         this.router.navigate(['/admin/hotels']);
       },
       error: (err) => {
         this.loading = false;
         this.error = err?.error?.message || 'Unable to save hotel.';
+        this.toast.error(this.error);
       }
     });
   }

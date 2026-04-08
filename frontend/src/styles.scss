@@ -267,6 +267,24 @@ body {
   background-repeat: no-repeat;
   background-position: center;
   min-height: 330px;
+  position: relative;
+}
+
+.site-banner__marquee {
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: 12px;
+    z-index: 2;
+    padding: 0.35rem 0;
+    /* background: rgba(255, 255, 255, 0.86); */
+    color: #1f2937;
+    font-size: 0.95rem;
+    top: 123px;
+    /* bottom: 173px; */
+    font-size: 48px;
+    color: #ed5338;
+    text-decoration: underline;
 }
 
 .auth-cover {
@@ -336,6 +354,28 @@ button:not(.no-style) {
   @apply opacity-60 cursor-not-allowed;
 }
 
+@keyframes btn-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.btn-loading {
+  position: relative;
+  pointer-events: none;
+}
+
+.btn-loading::after {
+  content: '';
+  width: 0.9rem;
+  height: 0.9rem;
+  border: 2px solid currentColor;
+  border-right-color: transparent;
+  border-radius: 9999px;
+  animation: btn-spin 0.7s linear infinite;
+  flex: 0 0 auto;
+}
+
 .btn-primary:focus-visible,
 .btn-secondary:focus-visible,
 .btn-tertiary:focus-visible,
@@ -360,6 +400,10 @@ textarea {
   @apply bg-dark text-cream min-h-screen;
 }
 
+.admin-layout {
+  display: flex;
+}
+
 .admin-sidebar a {
   @apply block px-4 py-3 text-sm transition-colors hover:bg-white/10;
 }
@@ -372,16 +416,19 @@ textarea {
   background:
     radial-gradient(circle at 10% 5%, rgba(201, 162, 39, 0.07), transparent 45%),
     linear-gradient(180deg, #fffaf6 0%, #fff8f3 45%, #fffaf7 100%);
+  min-height: 100vh;
 }
 
 .admin-shell .card {
   border-radius: var(--admin-radius-lg);
+  overflow: hidden;
 }
 
 .admin-shell .overflow-x-auto {
   border: 1px solid var(--admin-border);
   border-radius: var(--admin-radius-md);
   background: #fff;
+  -webkit-overflow-scrolling: touch;
 }
 
 .admin-shell table {
@@ -418,6 +465,7 @@ textarea {
   border-bottom: 1px solid #f1e8da;
   padding: 0.95rem 1rem;
   vertical-align: top;
+  overflow-wrap: anywhere;
 }
 
 .admin-shell tbody tr:last-child td {
@@ -429,6 +477,10 @@ textarea {
   flex-wrap: wrap;
   gap: 0.5rem;
   align-items: center;
+}
+
+.admin-shell .admin-actions > * {
+  flex: 0 1 auto;
 }
 
 .admin-shell td.space-x-2 {
@@ -510,6 +562,29 @@ textarea {
   border-color: #d7dee8;
 }
 
+.admin-mobile-topbar {
+  display: none;
+}
+
+.admin-mobile-toggle {
+  border: 1px solid rgba(255, 255, 255, 0.25);
+  background: rgba(255, 255, 255, 0.12);
+  color: #fff8f3;
+  border-radius: 0.625rem;
+  padding: 0.45rem 0.75rem;
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.admin-sidebar-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(14, 25, 8, 0.45);
+  z-index: 39;
+}
+
 .badge-confirmed {
   @apply bg-emerald-100 text-emerald-800 px-2.5 py-1 text-xs font-medium uppercase rounded-md;
 }
@@ -530,9 +605,67 @@ textarea {
   .admin-shell table {
     min-width: 860px;
   }
+
+  .admin-shell {
+    min-height: calc(100vh - 54px);
+  }
 }
 
 @media (max-width: 768px) {
+  .admin-layout {
+    display: block;
+    min-height: 100vh;
+  }
+
+  .admin-mobile-topbar {
+    position: sticky;
+    top: 0;
+    z-index: 42;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.75rem;
+    min-height: 54px;
+    padding: 0.55rem 0.9rem;
+    background: #1c2e12;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  }
+
+  .admin-sidebar {
+    position: fixed;
+    top: 54px;
+    left: 0;
+    bottom: 0;
+    width: min(82vw, 18rem);
+    min-height: auto;
+    transform: translateX(-102%);
+    transition: transform 220ms ease;
+    z-index: 40;
+    overflow-y: auto;
+  }
+
+  .admin-sidebar.is-open {
+    transform: translateX(0);
+  }
+
+  .admin-shell {
+    min-height: calc(100vh - 54px);
+  }
+
+  .admin-shell .overflow-x-auto {
+    margin: 0 -0.35rem;
+    border-radius: 10px;
+  }
+
+  .admin-shell table {
+    min-width: 700px;
+  }
+
+  .admin-shell .admin-ref {
+    max-width: 100%;
+    word-break: break-word;
+  }
+
   .site-nav__bar {
     min-height: 70px;
   }
@@ -556,6 +689,16 @@ textarea {
 
   .admin-shell .admin-actions {
     gap: 0.4rem;
+  }
+
+  .admin-shell .admin-actions .btn-primary,
+  .admin-shell .admin-actions .btn-secondary,
+  .admin-shell .admin-actions .btn-tertiary,
+  .admin-shell .admin-actions .btn-danger,
+  .admin-shell .admin-actions .btn-success,
+  .admin-shell .admin-actions .btn-gold {
+    width: 100%;
+    justify-content: center;
   }
 
   .btn-primary,

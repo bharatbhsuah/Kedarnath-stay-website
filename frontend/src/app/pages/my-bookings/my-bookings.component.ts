@@ -4,6 +4,7 @@ import { RouterLink } from '@angular/router';
 import { BookingService, Booking } from '../../core/services/booking.service';
 import { CurrencyInrPipe } from '../../shared/pipes/currency-inr.pipe';
 import { LoadingSpinnerComponent } from '../../shared/components/loading-spinner/loading-spinner.component';
+import { ToastService } from '../../core/services/toast.service';
 
 @Component({
   selector: 'app-my-bookings',
@@ -60,7 +61,13 @@ import { LoadingSpinnerComponent } from '../../shared/components/loading-spinner
                   </td>
                   <td class="px-3 sm:px-4 py-3">
                     <div class="flex flex-wrap gap-2">
-                      <button class="btn-primary text-xs" *ngIf="canCancel(b)" (click)="cancel(b)">Cancel</button>
+                      <a class="btn-secondary text-xs inline-block" [routerLink]="['/property', b.property_type, b.property_id]">
+                        View {{ b.property_type === 'room' ? 'Room' : 'Tent' }}
+                      </a>
+                      <a *ngIf="b.payment_status === 'unpaid'" class="btn-primary text-xs inline-block" [routerLink]="['/payment', b.id]">
+                        Pay Now
+                      </a>
+                      <button class="btn-primary text-xs" *ngIf="canCancel(b)" (click)="cancel(b)" [disabled]="loading" [class.btn-loading]="loading">Cancel</button>
                       <a *ngIf="b.payment_status === 'paid'" class="btn-gold text-xs inline-block" [routerLink]="['/receipt', b.id]">Receipt</a>
                     </div>
                   </td>
@@ -77,7 +84,7 @@ export class MyBookingsComponent {
   bookings: Booking[] = [];
   loading = false;
 
-  constructor(private bookingService: BookingService) {
+  constructor(private bookingService: BookingService, private toast: ToastService) {
     this.load();
   }
 
@@ -108,8 +115,14 @@ export class MyBookingsComponent {
     }
     this.loading = true;
     this.bookingService.cancelBooking(b.id).subscribe({
-      next: () => this.load(),
-      error: () => (this.loading = false)
+      next: () => {
+        this.toast.success('Booking cancelled successfully.');
+        this.load();
+      },
+      error: () => {
+        this.loading = false;
+        this.toast.error('Unable to cancel booking.');
+      }
     });
   }
 }

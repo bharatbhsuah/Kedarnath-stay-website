@@ -4,6 +4,7 @@ import { NgIf } from '@angular/common';
 import { Router, RouterLink } from '@angular/router';
 import { AuthService } from '../../../core/services/auth.service';
 import { LoadingSpinnerComponent } from '../../../shared/components/loading-spinner/loading-spinner.component';
+import { ToastService } from '../../../core/services/toast.service';
 
 @Component({
  
@@ -17,7 +18,7 @@ import { LoadingSpinnerComponent } from '../../../shared/components/loading-spin
           <label class="block text-xs uppercase mb-1.5 tracking-widest text-muted">Phone</label>
           <input type="tel" formControlName="phone" class="w-full" />
           <div class="text-xs text-red-600 mt-1" *ngIf="submitted && form.get('phone')?.invalid">
-            Phone is required.
+            Enter a valid 10-digit mobile number.
           </div>
         </div>
         <div>
@@ -27,7 +28,7 @@ import { LoadingSpinnerComponent } from '../../../shared/components/loading-spin
             Password is required.
           </div>
         </div>
-        <button class="btn-primary w-full mt-2" type="submit" [disabled]="loading">
+        <button class="btn-primary w-full mt-2" type="submit" [disabled]="loading" [class.btn-loading]="loading">
           Login
         </button>
         <div class="text-xs text-red-600" *ngIf="error">{{ error }}</div>
@@ -42,9 +43,10 @@ import { LoadingSpinnerComponent } from '../../../shared/components/loading-spin
   `
 })
 export class LoginComponent {
-  
+  private readonly mobilePattern = /^[0-9]{10}$/;
+
   form = this.fb.group({
-    phone: ['', [Validators.required]],
+    phone: ['', [Validators.required, Validators.pattern(this.mobilePattern)]],
     password: ['', Validators.required]
   });
   submitted = false;
@@ -54,7 +56,8 @@ export class LoginComponent {
   constructor(
     private fb: FormBuilder,
     private auth: AuthService,
-    private router: Router
+    private router: Router,
+    private toast: ToastService
   ) {}
 
   login(): void {
@@ -68,11 +71,13 @@ export class LoginComponent {
     this.auth.login(phone!, password!).subscribe({
       next: () => {
         this.loading = false;
+        this.toast.success('Login successful.');
         this.router.navigate(['/']);
       },
       error: (err) => {
         this.loading = false;
         this.error = err?.error?.message || 'Invalid credentials.';
+        this.toast.error(this.error);
       }
     });
   }

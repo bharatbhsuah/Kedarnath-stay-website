@@ -11,6 +11,7 @@ import { ReactiveFormsModule, FormsModule } from '@angular/forms';
 import { CurrencyInrPipe } from './shared/pipes/currency-inr.pipe';
 import { PropertyCardComponent } from './shared/components/property-card/property-card.component';
 import { LoadingSpinnerComponent } from './shared/components/loading-spinner/loading-spinner.component';
+import { ToastContainerComponent } from './shared/components/toast-container/toast-container.component';
 
 // Page components
 import { HomeComponent } from './pages/home/home.component';
@@ -48,6 +49,7 @@ import { PromoCodeMasterComponent } from './pages/admin/promo-code-master/promo-
     FooterComponent,
     PropertyCardComponent,
         LoadingSpinnerComponent,
+    ToastContainerComponent,
 
     CurrencyInrPipe,
     HomeComponent,

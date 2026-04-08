@@ -13,7 +13,6 @@ function ensureDir(dir) {
 
 const storage = multer.diskStorage({
   destination: (req, file, cb) => {
-    console.log(req)
     const type = req.params.type || req.originalUrl.includes('rooms') ? 'rooms' : 'tents';
     const dir = path.join(uploadDir, type);
     ensureDir(dir);

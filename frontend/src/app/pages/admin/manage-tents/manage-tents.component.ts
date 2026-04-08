@@ -4,6 +4,7 @@ import { RouterLink } from '@angular/router';
 import { HttpClient } from '@angular/common/http';
 import { LoadingSpinnerComponent } from '../../../shared/components/loading-spinner/loading-spinner.component';
 import { environment } from '../../../../environments/environment';
+import { ToastService } from '../../../core/services/toast.service';
 
 interface AdminTent {
   id: number;
@@ -20,7 +21,7 @@ interface AdminTent {
   selector: 'app-manage-tents',
   template: `
     <section class="space-y-4">
-      <div class="flex justify-between items-center gap-3">
+      <div class="flex flex-wrap justify-between items-start sm:items-center gap-3">
         <div>
           <h1 class="font-heading text-2xl">Manage Tents</h1>
           <p class="text-sm text-muted mt-1">Tent inventory grouped by hotel.</p>
@@ -66,8 +67,8 @@ interface AdminTent {
                 <td>
                   <div class="admin-actions">
                     <a [routerLink]="['/admin/tents', t.id, 'edit']" class="btn-secondary text-xs">Edit</a>
-                    <button class="btn-gold text-xs" (click)="toggleStatus(t)">Toggle Status</button>
-                    <button class="btn-danger text-xs" (click)="delete(t)">Delete</button>
+                    <button class="btn-gold text-xs" (click)="toggleStatus(t)" [disabled]="isActionLoading(t.id, 'toggle')" [class.btn-loading]="isActionLoading(t.id, 'toggle')">Toggle Status</button>
+                    <button class="btn-danger text-xs" (click)="delete(t)" [disabled]="isActionLoading(t.id, 'delete')" [class.btn-loading]="isActionLoading(t.id, 'delete')">Delete</button>
                   </div>
                 </td>
               </tr>
@@ -82,8 +83,9 @@ export class ManageTentsComponent {
   tents: AdminTent[] = [];
   groupedTents: { hotelName: string; tents: AdminTent[] }[] = [];
   loading = false;
+  activeActionKey: string | null = null;
 
-  constructor(private http: HttpClient) {
+  constructor(private http: HttpClient, private toast: ToastService) {
     this.load();
   }
 
@@ -114,14 +116,19 @@ export class ManageTentsComponent {
 
   toggleStatus(tent: AdminTent): void {
     const newStatus = tent.status === 'active' ? 'inactive' : 'active';
+    this.activeActionKey = this.actionKey(tent.id, 'toggle');
     this.http
-      .put<AdminTent>(`${environment.apiUrl}/admin/tents/${tent.id}`, {
-        ...tent,
-        status: newStatus
-      })
+      .put<AdminTent>(`${environment.apiUrl}/admin/tents/${tent.id}`, { status: newStatus })
       .subscribe({
-        next: () => this.load(),
-        error: () => {}
+        next: () => {
+          this.activeActionKey = null;
+          this.toast.success('Tent updated.');
+          this.load();
+        },
+        error: () => {
+          this.activeActionKey = null;
+          this.toast.error('Unable to update tent status.');
+        }
       });
   }
 
@@ -129,9 +136,25 @@ export class ManageTentsComponent {
     if (!confirm('Delete this tent?')) {
       return;
     }
+    this.activeActionKey = this.actionKey(tent.id, 'delete');
     this.http.delete(`${environment.apiUrl}/admin/tents/${tent.id}`).subscribe({
-      next: () => this.load(),
-      error: () => {}
+      next: () => {
+        this.activeActionKey = null;
+        this.toast.success('Tent deleted.');
+        this.load();
+      },
+      error: () => {
+        this.activeActionKey = null;
+        this.toast.error('Unable to delete tent.');
+      }
     });
+  }
+
+  private actionKey(id: number, action: 'toggle' | 'delete'): string {
+    return `${action}:${id}`;
+  }
+
+  isActionLoading(id: number, action: 'toggle' | 'delete'): boolean {
+    return this.activeActionKey === this.actionKey(id, action);
   }
 }

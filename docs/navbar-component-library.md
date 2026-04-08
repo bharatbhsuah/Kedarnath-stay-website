@@ -7,7 +7,7 @@
 
 ## Link Variants
 - `nav-tone-stay`: Core discovery paths (`Home`, `Rooms`, `Tents`)
-- `nav-tone-support`: Support/info paths (`About Us`, `Enquiry`)
+- `nav-tone-support`: Support/info paths (`Contact Us`, `Enquiry`)
 - `nav-tone-account`: User account paths (`My Bookings`)
 - `nav-tone-admin`: Admin access (`Admin`)
 

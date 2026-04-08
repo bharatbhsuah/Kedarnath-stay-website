@@ -31,7 +31,7 @@ type Tone = 'stay' | 'support' | 'account' | 'admin';
         <h2 class="font-semibold uppercase tracking-widest text-xs text-muted">Active State</h2>
         <div class="flex flex-wrap gap-3">
           <a href="javascript:void(0)" class="site-nav__link nav-tone-stay">Rooms</a>
-          <a href="javascript:void(0)" class="site-nav__link nav-tone-support is-active" aria-current="page">About Us</a>
+          <a href="javascript:void(0)" class="site-nav__link nav-tone-support is-active" aria-current="page">Contact Us</a>
           <a href="javascript:void(0)" class="site-nav__link nav-tone-account">My Bookings</a>
           <a href="javascript:void(0)" class="site-nav__link nav-tone-admin">Admin</a>
         </div>
@@ -55,7 +55,7 @@ export class NavbarPrototypeComponent {
   variants: { label: string; tone: Tone }[] = [
     { label: 'Home', tone: 'stay' },
     { label: 'Rooms', tone: 'stay' },
-    { label: 'About Us', tone: 'support' },
+    { label: 'Contact Us', tone: 'support' },
     { label: 'Enquiry', tone: 'support' },
     { label: 'My Bookings', tone: 'account' },
     { label: 'Admin', tone: 'admin' }

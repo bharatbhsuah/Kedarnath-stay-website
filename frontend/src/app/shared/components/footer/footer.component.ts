@@ -6,7 +6,7 @@ import { Component } from '@angular/core';
     <footer class="bg-dark text-cream mt-auto">
       <div class="max-w-6xl mx-auto px-4 sm:px-6 py-10 sm:py-12">
         <div class="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-6 text-sm">
-          <div class="font-heading text-lg text-cream">Wilderness Stays</div>
+          <div class="font-heading text-lg text-cream">Kedar-Stays</div>
           <div class="flex flex-wrap gap-6">
             <a routerLink="/rooms" class="text-cream/80 hover:text-cream transition-colors">Rooms</a>
             <a routerLink="/tents" class="text-cream/80 hover:text-cream transition-colors">Tents</a>
@@ -14,7 +14,7 @@ import { Component } from '@angular/core';
           </div>
         </div>
         <div class="mt-8 pt-8 border-t border-white/10 flex flex-col sm:flex-row sm:justify-between gap-4 text-cream/70 text-sm">
-          <p>&copy; {{ year }} Wilderness Stays. All rights reserved.</p>
+          <p>&copy; {{ year }} Kedar-Stays. All rights reserved.</p>
           <p>Crafted with care for boutique stays in the wild.</p>
         </div>
       </div>

@@ -3,6 +3,7 @@ import { ReactiveFormsModule, FormBuilder, Validators } from '@angular/forms';
 import { NgIf } from '@angular/common';
 import { EnquiryService } from '../../core/services/enquiry.service';
 import { LoadingSpinnerComponent } from '../../shared/components/loading-spinner/loading-spinner.component';
+import { ToastService } from '../../core/services/toast.service';
 
 @Component({
  
@@ -31,6 +32,9 @@ import { LoadingSpinnerComponent } from '../../shared/components/loading-spinner
         <div>
           <label class="block text-xs uppercase mb-1.5 tracking-widest text-muted">Phone</label>
           <input type="tel" formControlName="phone" class="w-full" />
+          <div class="text-xs text-red-600 mt-1" *ngIf="submitted && form.get('phone')?.invalid">
+            Enter a valid 10-digit mobile number.
+          </div>
         </div>
         <div class="grid sm:grid-cols-2 gap-4">
           <div>
@@ -45,6 +49,9 @@ import { LoadingSpinnerComponent } from '../../shared/components/loading-spinner
           <div>
             <label class="block text-xs uppercase mb-1.5 tracking-widest text-muted">Approx Guests</label>
             <input type="number" min="1" formControlName="approxGuests" class="w-full" />
+            <div class="text-xs text-red-600 mt-1" *ngIf="submitted && form.get('approxGuests')?.invalid">
+              Guests must be at least 1.
+            </div>
           </div>
         </div>
         <div>
@@ -54,7 +61,7 @@ import { LoadingSpinnerComponent } from '../../shared/components/loading-spinner
             Please share a short message.
           </div>
         </div>
-        <button class="btn-primary w-full mt-2" type="submit" [disabled]="loading">
+        <button class="btn-primary w-full mt-2" type="submit" [disabled]="loading" [class.btn-loading]="loading">
           Send Enquiry
         </button>
         <div class="text-sm text-emerald-700" *ngIf="success">
@@ -67,12 +74,14 @@ import { LoadingSpinnerComponent } from '../../shared/components/loading-spinner
   `
 })
 export class EnquiryComponent {
+  private readonly mobilePattern = /^[0-9]{10}$/;
+
   form = this.fb.group({
     name: ['', Validators.required],
     email: ['', [Validators.required, Validators.email]],
-    phone: [''],
+    phone: ['', Validators.pattern(this.mobilePattern)],
     interestedIn: ['room', Validators.required],
-    approxGuests: [1],
+    approxGuests: [1, [Validators.min(1)]],
     message: ['', Validators.required]
   });
   submitted = false;
@@ -82,7 +91,8 @@ export class EnquiryComponent {
 
   constructor(
     private fb: FormBuilder,
-    private enquiryService: EnquiryService
+    private enquiryService: EnquiryService,
+    private toast: ToastService
   ) {}
 
   submit(): void {
@@ -97,6 +107,7 @@ export class EnquiryComponent {
       next: () => {
         this.loading = false;
         this.success = true;
+        this.toast.success('Enquiry submitted successfully.');
         this.form.reset({
           interestedIn: 'room',
           approxGuests: 1
@@ -106,6 +117,7 @@ export class EnquiryComponent {
       error: () => {
         this.loading = false;
         this.error = 'Unable to send enquiry. Please try again.';
+        this.toast.error(this.error);
       }
     });
   }

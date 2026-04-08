@@ -1,12 +1,13 @@
 import { Component } from '@angular/core';
 import { ActivatedRoute, Router } from '@angular/router';
 import { FormBuilder, Validators } from '@angular/forms';
-import { switchMap } from 'rxjs';
+import { map, switchMap } from 'rxjs';
 import { RoomService, Room } from '../../core/services/room.service';
 import { TentService, Tent } from '../../core/services/tent.service';
 import { GuestService } from '../../core/services/guest.service';
 import { BookingService } from '../../core/services/booking.service';
 import { AuthService } from '../../core/services/auth.service';
+import { ToastService } from '../../core/services/toast.service';
 
 type PropertyType = 'room' | 'tent';
 
@@ -31,9 +32,9 @@ type PropertyType = 'room' | 'tent';
 
           <div>
             <label class="block text-xs uppercase tracking-widest mb-1.5 text-muted">Phone Number</label>
-            <input type="tel" formControlName="phone" placeholder="+91XXXXXXXXXX" />
+            <input type="tel" formControlName="phone" placeholder="10-digit mobile number" />
             <div class="text-xs text-red-600 mt-1" *ngIf="submitted && form.controls.phone.invalid">
-              Valid phone number is required.
+              Enter a valid 10-digit mobile number.
             </div>
           </div>
 
@@ -45,7 +46,7 @@ type PropertyType = 'room' | 'tent';
             </div>
           </div>
 
-          <button class="btn-primary w-full mt-2" type="submit" [disabled]="loading">
+          <button class="btn-primary w-full mt-2" type="submit" [disabled]="loading" [class.btn-loading]="loading">
             {{ loading ? 'Processing...' : 'Confirm & Pay' }}
           </button>
           <div class="text-xs text-red-600" *ngIf="error">{{ error }}</div>
@@ -98,6 +99,8 @@ type PropertyType = 'room' | 'tent';
   `
 })
 export class BookingComponent {
+  private readonly mobilePattern = /^[0-9]{10}$/;
+
   type!: PropertyType;
   propertyId!: number;
   checkIn = '';
@@ -111,7 +114,7 @@ export class BookingComponent {
 
   form = this.fb.group({
     name: ['', [Validators.required]],
-    phone: ['', [Validators.required, Validators.pattern(/^\+?\d{10,15}$/)]],
+    phone: ['', [Validators.required, Validators.pattern(this.mobilePattern)]],
     email: ['', [Validators.email]]
   });
 
@@ -123,7 +126,8 @@ export class BookingComponent {
     private tentService: TentService,
     private authService: AuthService,
     private guestService: GuestService,
-    private bookingService: BookingService
+    private bookingService: BookingService,
+    private toast: ToastService
   ) {
     this.route.paramMap.subscribe((params) => {
       const typeParam = params.get('type');
@@ -236,11 +240,13 @@ export class BookingComponent {
       createBookingRequest().subscribe({
         next: (booking) => {
           this.loading = false;
+          this.toast.success('Booking confirmed. Continue to payment.');
           this.router.navigate(['/payment', booking.id]);
         },
         error: (err) => {
           this.loading = false;
           this.error = err?.error?.message || 'Unable to continue to payment.';
+          this.toast.error(this.error);
         }
       });
       return;
@@ -253,25 +259,37 @@ export class BookingComponent {
         email: email || undefined
       })
       .pipe(
-        switchMap(() =>
+        switchMap((phoneLoginResult) =>
           this.guestService.updateGuest({
             name,
             email: email || undefined
-          })
+          }).pipe(map(() => phoneLoginResult))
         ),
-        switchMap(() => createBookingRequest())
+        switchMap((phoneLoginResult) =>
+          createBookingRequest().pipe(map((booking) => ({ booking, phoneLoginResult })))
+        )
       )
       .subscribe({
-        next: (booking) => {
+        next: ({ booking, phoneLoginResult }) => {
           this.loading = false;
           this.isLoggedIn = true;
+          const generatedCredentials = phoneLoginResult.generatedCredentials;
+          if (generatedCredentials) {
+            sessionStorage.setItem(
+              `generated_credentials_${booking.id}`,
+              JSON.stringify(generatedCredentials)
+            );
+          }
+          this.toast.success('Booking confirmed. Continue to payment.');
           this.router.navigate(['/payment', booking.id], {
-            queryParams: { phone }
+            queryParams: { phone },
+            state: generatedCredentials ? { generatedCredentials } : undefined
           });
         },
         error: (err) => {
           this.loading = false;
           this.error = err?.error?.message || 'Unable to continue to payment.';
+          this.toast.error(this.error);
         }
       });
   }

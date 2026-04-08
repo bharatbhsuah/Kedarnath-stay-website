@@ -5,6 +5,7 @@ import { NgIf, NgForOf } from '@angular/common';
 import { HttpClient } from '@angular/common/http';
 import { LoadingSpinnerComponent } from '../../../shared/components/loading-spinner/loading-spinner.component';
 import { environment } from '../../../../environments/environment';
+import { ToastService } from '../../../core/services/toast.service';
 
 interface AdminHotelOption {
   id: number;
@@ -40,12 +41,15 @@ interface AdminUser {
           <label class="block text-xs uppercase mb-1 tracking-widest">Phone</label>
           <input type="tel" formControlName="phone" />
           <div class="text-xs text-red-600" *ngIf="submitted && form.get('phone')?.invalid">
-            Phone is required.
+            Enter a valid 10-digit mobile number.
           </div>
         </div>
         <div>
           <label class="block text-xs uppercase mb-1 tracking-widest">Email</label>
           <input type="email" formControlName="email" />
+          <div class="text-xs text-red-600" *ngIf="submitted && form.get('email')?.invalid">
+            Enter a valid email address.
+          </div>
         </div>
         <div>
           <label class="block text-xs uppercase mb-1 tracking-widest">Role</label>
@@ -79,7 +83,7 @@ interface AdminUser {
             Password is required for new users.
           </div>
         </div>
-        <button class="btn-primary mt-2" type="submit" [disabled]="loading">
+        <button class="btn-primary mt-2" type="submit" [disabled]="loading" [class.btn-loading]="loading">
           {{ isEdit ? 'Update User' : 'Create User' }}
         </button>
         <div class="text-xs text-red-600" *ngIf="error">{{ error }}</div>
@@ -89,10 +93,12 @@ interface AdminUser {
   `
 })
 export class UserFormComponent {
+  private readonly mobilePattern = /^[0-9]{10}$/;
+
   form = this.fb.group({
     name: ['', Validators.required],
-    phone: ['', Validators.required],
-    email: [''],
+    phone: ['', [Validators.required, Validators.pattern(this.mobilePattern)]],
+    email: ['', Validators.email],
     role: ['admin', Validators.required],
     hotelId: [''],
     password: ['']
@@ -109,7 +115,8 @@ export class UserFormComponent {
     private fb: FormBuilder,
     private route: ActivatedRoute,
     private http: HttpClient,
-    private router: Router
+    private router: Router,
+    private toast: ToastService
   ) {
     this.loadHotels();
     const roleCtrl = this.form.get('role');
@@ -192,11 +199,13 @@ export class UserFormComponent {
     req.subscribe({
       next: () => {
         this.loading = false;
+        this.toast.success(this.isEdit ? 'User updated successfully.' : 'User created successfully.');
         this.router.navigate(['/admin/users']);
       },
       error: (err) => {
         this.loading = false;
         this.error = err?.error?.message || 'Unable to save user.';
+        this.toast.error(this.error);
       }
     });
   }

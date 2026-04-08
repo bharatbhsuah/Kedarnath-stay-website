@@ -4,6 +4,7 @@ import { NgForOf, NgIf } from '@angular/common';
 import { RouterLink } from '@angular/router';
 import { LoadingSpinnerComponent } from '../../../shared/components/loading-spinner/loading-spinner.component';
 import { environment } from '../../../../environments/environment';
+import { ToastService } from '../../../core/services/toast.service';
 
 interface AdminHotelOption {
   id: number;
@@ -33,7 +34,7 @@ interface AdminUser {
         <a routerLink="/admin/users/new" class="btn-primary text-xs">Add User</a>
       </div>
 
-      <div class="card p-4 flex items-center gap-2 text-sm max-w-md">
+      <div class="card p-4 flex flex-col sm:flex-row sm:items-center gap-2 text-sm max-w-md">
         <label class="text-xs uppercase tracking-widest text-muted">Hotel</label>
         <select class="text-sm flex-1" [(ngModel)]="selectedHotelId" (change)="load()">
           <option [ngValue]="null">All</option>
@@ -75,7 +76,7 @@ interface AdminUser {
                 <td>
                   <div class="admin-actions">
                     <a [routerLink]="['/admin/users', u.id, 'edit']" class="btn-secondary text-xs">Edit</a>
-                    <button class="btn-danger text-xs" (click)="delete(u)">Delete</button>
+                    <button class="btn-danger text-xs" (click)="delete(u)" [disabled]="deletingUserId === u.id" [class.btn-loading]="deletingUserId === u.id">Delete</button>
                   </div>
                 </td>
               </tr>
@@ -93,8 +94,9 @@ export class ManageUsersComponent {
   loading = false;
   errorMessage = '';
   groupedUsers: { role: string; users: AdminUser[] }[] = [];
+  deletingUserId: number | null = null;
 
-  constructor(private http: HttpClient) {
+  constructor(private http: HttpClient, private toast: ToastService) {
     this.loadHotels();
     this.load();
   }
@@ -149,10 +151,17 @@ export class ManageUsersComponent {
     if (!confirm('Delete this user?')) {
       return;
     }
+    this.deletingUserId = user.id;
     this.http.delete(`${environment.apiUrl}/admin/users/${user.id}`).subscribe({
-      next: () => this.load(),
+      next: () => {
+        this.deletingUserId = null;
+        this.toast.success('User deleted.');
+        this.load();
+      },
       error: (err) => {
+        this.deletingUserId = null;
         this.errorMessage = err?.error?.message || 'Failed to delete user';
+        this.toast.error(this.errorMessage);
       }
     });
   }

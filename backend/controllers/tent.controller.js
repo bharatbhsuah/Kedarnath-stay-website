@@ -12,6 +12,27 @@ function buildImageUrl(req, relativePath) {
   return `${baseUrl}/${normalized.replace(/^\.?\//, '')}`;
 }
 
+function parseAmenities(rawAmenities) {
+  if (rawAmenities == null) {
+    return [];
+  }
+  if (Array.isArray(rawAmenities)) {
+    return rawAmenities.map((item) => String(item).trim()).filter(Boolean);
+  }
+  if (typeof rawAmenities === 'string') {
+    const trimmed = rawAmenities.trim();
+    if (!trimmed) {
+      return [];
+    }
+    try {
+      return parseAmenities(JSON.parse(trimmed));
+    } catch (_) {
+      return [trimmed];
+    }
+  }
+  return [String(rawAmenities)];
+}
+
 async function listTents(req, res) {
   try {
     const { type, minPrice, maxPrice, capacity } = req.query;
@@ -63,7 +84,7 @@ async function listTents(req, res) {
       }));
       return {
         ...tent,
-        amenities: tent.amenities ? JSON.parse(tent.amenities) : [],
+        amenities: parseAmenities(tent.amenities),
         images
       };
     });
@@ -130,7 +151,7 @@ async function searchTents(req, res) {
       }));
       return {
         ...tent,
-        amenities: tent.amenities ? JSON.parse(tent.amenities) : [],
+        amenities: parseAmenities(tent.amenities),
         images
       };
     });
@@ -179,7 +200,7 @@ async function getTentById(req, res) {
 
     return res.json({
       ...tent,
-      amenities: tent.amenities ? JSON.parse(tent.amenities) : [],
+      amenities: parseAmenities(tent.amenities),
       images,
       bookedDateRanges
     });

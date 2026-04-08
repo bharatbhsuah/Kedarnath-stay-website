@@ -4,6 +4,7 @@ import { RouterLink } from '@angular/router';
 import { NgForOf, NgIf } from '@angular/common';
 import { LoadingSpinnerComponent } from '../../../shared/components/loading-spinner/loading-spinner.component';
 import { environment } from '../../../../environments/environment';
+import { ToastService } from '../../../core/services/toast.service';
 
 interface AdminHotel {
   id: number;
@@ -17,7 +18,7 @@ interface AdminHotel {
   standalone: false,
   template: `
     <section class="space-y-4">
-      <div class="flex justify-between items-center gap-3">
+      <div class="flex flex-wrap justify-between items-start sm:items-center gap-3">
         <div>
           <h1 class="font-heading text-2xl">Hotel Master</h1>
           <p class="text-sm text-muted mt-1">Create, edit and manage hotels/branches.</p>
@@ -54,8 +55,8 @@ interface AdminHotel {
                 <td>
                   <div class="admin-actions">
                     <a [routerLink]="['/admin/hotels', h.id, 'edit']" class="btn-secondary text-xs">Edit</a>
-                    <button class="btn-gold text-xs" (click)="toggleStatus(h)">Toggle Status</button>
-                    <button class="btn-danger text-xs" (click)="delete(h)">Delete</button>
+                    <button class="btn-gold text-xs" (click)="toggleStatus(h)" [disabled]="isActionLoading(h.id, 'toggle')" [class.btn-loading]="isActionLoading(h.id, 'toggle')">Toggle Status</button>
+                    <button class="btn-danger text-xs" (click)="delete(h)" [disabled]="isActionLoading(h.id, 'delete')" [class.btn-loading]="isActionLoading(h.id, 'delete')">Delete</button>
                   </div>
                 </td>
               </tr>
@@ -69,8 +70,9 @@ interface AdminHotel {
 export class ManageHotelsComponent {
   hotels: AdminHotel[] = [];
   loading = false;
+  activeActionKey: string | null = null;
 
-  constructor(private http: HttpClient) {
+  constructor(private http: HttpClient, private toast: ToastService) {
     this.load();
   }
 
@@ -89,14 +91,22 @@ export class ManageHotelsComponent {
 
   toggleStatus(hotel: AdminHotel): void {
     const newStatus = hotel.status === 'active' ? 'inactive' : 'active';
+    this.activeActionKey = this.actionKey(hotel.id, 'toggle');
     this.http
       .put<AdminHotel>(`${environment.apiUrl}/admin/hotels/${hotel.id}`, {
         ...hotel,
         status: newStatus
       })
       .subscribe({
-        next: () => this.load(),
-        error: () => {}
+        next: () => {
+          this.activeActionKey = null;
+          this.toast.success('Hotel updated.');
+          this.load();
+        },
+        error: () => {
+          this.activeActionKey = null;
+          this.toast.error('Unable to update hotel status.');
+        }
       });
   }
 
@@ -104,9 +114,25 @@ export class ManageHotelsComponent {
     if (!confirm('Delete this hotel?')) {
       return;
     }
+    this.activeActionKey = this.actionKey(hotel.id, 'delete');
     this.http.delete(`${environment.apiUrl}/admin/hotels/${hotel.id}`).subscribe({
-      next: () => this.load(),
-      error: () => {}
+      next: () => {
+        this.activeActionKey = null;
+        this.toast.success('Hotel deleted.');
+        this.load();
+      },
+      error: () => {
+        this.activeActionKey = null;
+        this.toast.error('Unable to delete hotel.');
+      }
     });
+  }
+
+  private actionKey(id: number, action: 'toggle' | 'delete'): string {
+    return `${action}:${id}`;
+  }
+
+  isActionLoading(id: number, action: 'toggle' | 'delete'): boolean {
+    return this.activeActionKey === this.actionKey(id, action);
   }
 }

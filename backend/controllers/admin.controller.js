@@ -25,6 +25,32 @@ function getBookingHotelId(db, booking) {
   return null;
 }
 
+function normalizeAmenitiesInput(inputAmenities, fallbackAmenities) {
+  if (inputAmenities === undefined) {
+    return fallbackAmenities;
+  }
+
+  let value = inputAmenities;
+  if (typeof value === 'string') {
+    const trimmed = value.trim();
+    if (!trimmed) {
+      return JSON.stringify([]);
+    }
+    try {
+      value = JSON.parse(trimmed);
+    } catch (_) {
+      value = [trimmed];
+    }
+  }
+
+  if (!Array.isArray(value)) {
+    value = value == null ? [] : [String(value)];
+  }
+
+  const normalized = value.map((item) => String(item).trim()).filter(Boolean);
+  return JSON.stringify(normalized);
+}
+
 async function getDashboard(req, res) {
   try {
     const db = getDb();
@@ -576,16 +602,16 @@ async function updateRoom(req, res) {
        WHERE id = ?`
     );
     stmt.run(
-      name || existing.name,
-      type || existing.type,
-      description || existing.description,
-      capacity || existing.capacity,
+      name ?? existing.name,
+      type ?? existing.type,
+      description ?? existing.description,
+      capacity ?? existing.capacity,
       nextTotal,
       nextRegistration,
       nextArrival,
       nextTotal,
-      amenities ? JSON.stringify(amenities) : existing.amenities,
-      status || existing.status,
+      normalizeAmenitiesInput(amenities, existing.amenities),
+      status ?? existing.status,
       id
     );
     const room = db.prepare('SELECT * FROM rooms WHERE id = ?').get(id);
@@ -644,7 +670,6 @@ async function uploadRoomImages(req, res) {
     }
     
     const filesToAdd = req.files.slice(0, slotsLeft);
-    console.log(req.files)
     const insert = db.prepare(
       'INSERT INTO room_images (room_id, image_path, is_primary) VALUES (?, ?, ?)'
     );
@@ -862,16 +887,16 @@ async function updateTent(req, res) {
        WHERE id = ?`
     );
     stmt.run(
-      name || existing.name,
-      type || existing.type,
-      description || existing.description,
-      capacity || existing.capacity,
+      name ?? existing.name,
+      type ?? existing.type,
+      description ?? existing.description,
+      capacity ?? existing.capacity,
       nextTotal,
       nextRegistration,
       nextArrival,
       nextTotal,
-      amenities ? JSON.stringify(amenities) : existing.amenities,
-      status || existing.status,
+      normalizeAmenitiesInput(amenities, existing.amenities),
+      status ?? existing.status,
       id
     );
     const tent = db.prepare('SELECT * FROM tents WHERE id = ?').get(id);
