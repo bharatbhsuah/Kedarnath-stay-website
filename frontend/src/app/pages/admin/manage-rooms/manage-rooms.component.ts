@@ -47,9 +47,7 @@ interface AdminRoom {
                 <th>Type</th>
                 <th>Capacity</th>
                 <th>Qty</th>
-                <th>Downpayment</th>
                 <th>Arrival</th>
-                <th>Total</th>
                 <th>Status</th>
                 <th>Actions</th>
               </tr>
@@ -61,9 +59,7 @@ interface AdminRoom {
                 <td>{{ r.type }}</td>
                 <td>{{ r.capacity }}</td>
                 <td>{{ r.quantity || 1 }}</td>
-                <td>{{ r.registrationAmount | currencyInr }}</td>
                 <td>{{ r.arrivalAmount | currencyInr }}</td>
-                <td>{{ r.totalPrice | currencyInr }}</td>
                 <td>
                   <span class="status-pill" [ngClass]="r.status === 'active' ? 'confirmed' : 'cancelled'">{{ r.status }}</span>
                 </td>

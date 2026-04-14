@@ -224,7 +224,7 @@ interface InventoryResponse {
                 <td>{{ row.booked_quantity }}</td>
                 <td>{{ row.available_quantity }}</td>
                 <td>{{ row.occupancy_percent }}%</td>
-                <td>{{ row.total_price | currencyInr }}</td>
+                <td>{{ row.arrival_amount | currencyInr }}</td>
               </tr>
             </tbody>
           </table>
