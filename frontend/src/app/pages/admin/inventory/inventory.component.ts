@@ -16,10 +16,12 @@ interface AdminHotel {
 }
 
 interface InventoryRow {
-  room_id: number;
-  room_name: string;
-  room_type: string;
-  room_status: string;
+  property_type: 'room' | 'tent';
+  property_id: number;
+  property_name: string;
+  property_item_label: string;
+  property_type_name: string;
+  property_status: string;
   capacity: number;
   hotel_id: number | null;
   hotel_name: string;
@@ -37,7 +39,7 @@ interface InventoryRow {
 interface InventoryHotelSummary {
   hotel_id: number | null;
   hotel_name: string;
-  room_types: number;
+  property_types: number;
   registered_quantity: number;
   booked_quantity: number;
   available_quantity: number;
@@ -50,7 +52,7 @@ interface InventoryResponse {
     to: string;
   };
   summary: {
-    room_types: number;
+    property_types: number;
     hotels: number;
     registered_quantity: number;
     booked_quantity: number;
@@ -69,7 +71,7 @@ interface InventoryResponse {
         <div>
           <h1 class="font-heading text-2xl">Inventory</h1>
           <p class="text-sm text-muted mt-1">
-            Registered room stock vs booked rooms for the selected period.
+            Registered stock vs booked inventory for rooms and tents in the selected period.
           </p>
         </div>
         <button class="btn-secondary text-xs" (click)="load()" [disabled]="loading" [class.btn-loading]="loading">
@@ -105,6 +107,9 @@ interface InventoryResponse {
               <option value="deluxe">Deluxe</option>
               <option value="suite">Suite</option>
               <option value="family">Family</option>
+              <option value="luxury">Luxury</option>
+              <option value="safari">Safari</option>
+              <option value="honeymoon">Honeymoon</option>
             </select>
           </div>
 
@@ -125,7 +130,7 @@ interface InventoryResponse {
               type="text"
               [(ngModel)]="filter.search"
               class="w-full"
-              placeholder="Room / type / hotel"
+              placeholder="Property / type / hotel"
             />
           </div>
           <button class="btn-primary text-xs h-10" (click)="load()" [disabled]="loading" [class.btn-loading]="loading">
@@ -138,18 +143,25 @@ interface InventoryResponse {
       </div>
 
       <div class="card p-4 sm:p-5 text-sm">
-        <h2 class="font-semibold text-sm uppercase tracking-widest mb-3">Manual Room Booking</h2>
+        <h2 class="font-semibold text-sm uppercase tracking-widest mb-3">Manual Inventory Booking</h2>
         <p class="text-muted text-xs mb-3">
-          Mark a room as manually booked for a date range. Use quantity 0 to remove an existing manual block for the same room and dates.
+          Mark a room/tent as manually booked for a date range. Use quantity 0 to remove an existing manual block for the same property and dates.
         </p>
 
         <div class="grid md:grid-cols-5 gap-3 items-end">
+          <div>
+            <label class="block text-xs uppercase mb-1 tracking-widest text-muted">Type</label>
+            <select [(ngModel)]="manualBooking.propertyType" class="w-full" [disabled]="loading || savingManualBooking" (ngModelChange)="onManualTypeChange()">
+              <option value="room">Room</option>
+              <option value="tent">Tent</option>
+            </select>
+          </div>
           <div class="md:col-span-2">
-            <label class="block text-xs uppercase mb-1 tracking-widest text-muted">Room</label>
-            <select [(ngModel)]="manualBooking.roomId" class="w-full" [disabled]="!rows.length || loading || savingManualBooking">
-              <option value="" disabled>Select room</option>
-              <option *ngFor="let row of rows" [value]="row.room_id">
-                {{ row.room_name }} ({{ row.hotel_name }})
+            <label class="block text-xs uppercase mb-1 tracking-widest text-muted">Property</label>
+            <select [(ngModel)]="manualBooking.propertyId" class="w-full" [disabled]="!filteredProperties.length || loading || savingManualBooking">
+              <option value="" disabled>Select property</option>
+              <option *ngFor="let row of filteredProperties" [value]="row.property_id">
+                {{ row.property_name }} ({{ row.property_type }} · {{ row.hotel_name }})
               </option>
             </select>
           </div>
@@ -181,7 +193,7 @@ interface InventoryResponse {
           <button
             class="btn-primary text-xs h-10"
             (click)="saveManualBooking()"
-            [disabled]="loading || savingManualBooking || !rows.length"
+            [disabled]="loading || savingManualBooking || !filteredProperties.length"
             [class.btn-loading]="savingManualBooking"
           >
             Save Manual Booking
@@ -191,21 +203,21 @@ interface InventoryResponse {
 
       <div class="grid grid-cols-2 lg:grid-cols-4 gap-3">
         <div class="card p-4">
-          <div class="text-xs uppercase tracking-widest text-muted">Room Types</div>
-          <div class="text-2xl font-semibold mt-1">{{ data.summary.room_types }}</div>
-        </div>
-        <div class="card p-4">
-          <div class="text-xs uppercase tracking-widest text-muted">Registered Rooms</div>
-          <div class="text-2xl font-semibold mt-1">{{ data.summary.registered_quantity }}</div>
-        </div>
-        <div class="card p-4">
-          <div class="text-xs uppercase tracking-widest text-muted">Booked Rooms</div>
-          <div class="text-2xl font-semibold mt-1">{{ data.summary.booked_quantity }}</div>
-        </div>
-        <div class="card p-4">
-          <div class="text-xs uppercase tracking-widest text-muted">Available Rooms</div>
-          <div class="text-2xl font-semibold mt-1">{{ data.summary.available_quantity }}</div>
-        </div>
+           <div class="text-xs uppercase tracking-widest text-muted">Property Types</div>
+           <div class="text-2xl font-semibold mt-1">{{ data.summary.property_types }}</div>
+         </div>
+         <div class="card p-4">
+           <div class="text-xs uppercase tracking-widest text-muted">Registered Units</div>
+           <div class="text-2xl font-semibold mt-1">{{ data.summary.registered_quantity }}</div>
+         </div>
+         <div class="card p-4">
+           <div class="text-xs uppercase tracking-widest text-muted">Booked Units</div>
+           <div class="text-2xl font-semibold mt-1">{{ data.summary.booked_quantity }}</div>
+         </div>
+         <div class="card p-4">
+           <div class="text-xs uppercase tracking-widest text-muted">Available Units</div>
+           <div class="text-2xl font-semibold mt-1">{{ data.summary.available_quantity }}</div>
+         </div>
       </div>
 
       <div *ngIf="!isHotelAdmin && data.hotelSummary.length" class="card p-3 sm:p-4">
@@ -225,7 +237,7 @@ interface InventoryResponse {
             <tbody>
               <tr *ngFor="let h of data.hotelSummary">
                 <td class="font-medium">{{ h.hotel_name }}</td>
-                <td>{{ h.room_types }}</td>
+                <td>{{ h.property_types }}</td>
                 <td>{{ h.registered_quantity }}</td>
                 <td>{{ h.booked_quantity }}</td>
                 <td>{{ h.available_quantity }}</td>
@@ -244,7 +256,7 @@ interface InventoryResponse {
 
       <div *ngIf="rows.length" class="card p-3 sm:p-4">
         <h2 class="font-semibold text-sm uppercase tracking-widest mb-3">
-          Room Inventory
+          Inventory
           <span class="text-muted normal-case font-normal ml-1">
             ({{ data.period.from }} to {{ data.period.to }})
           </span>
@@ -254,7 +266,8 @@ interface InventoryResponse {
             <thead>
               <tr>
                 <th *ngIf="!isHotelAdmin">Hotel</th>
-                <th>Room</th>
+                <th>Property</th>
+                <th>Category</th>
                 <th>Type</th>
                 <th>Status</th>
                 <th>Capacity</th>
@@ -270,14 +283,22 @@ interface InventoryResponse {
               <tr *ngFor="let row of rows">
                 <td *ngIf="!isHotelAdmin">{{ row.hotel_name }}</td>
                 <td class="font-medium">
-                  <a [routerLink]="['/admin/inventory/rooms', row.room_id, 'bookings']" class="text-blue-600 hover:underline">
-                    {{ row.room_name }}
+                  <a
+                    [routerLink]="
+                      row.property_type === 'room'
+                        ? ['/admin/inventory/rooms', row.property_id, 'bookings']
+                        : ['/admin/inventory/tents', row.property_id, 'bookings']
+                    "
+                    class="text-blue-600 hover:underline"
+                  >
+                    {{ row.property_name }}
                   </a>
                 </td>
-                <td>{{ row.room_type }}</td>
+                <td class="uppercase">{{ row.property_type }}</td>
+                <td>{{ row.property_type_name }}</td>
                 <td>
-                  <span class="status-pill" [ngClass]="row.room_status === 'active' ? 'confirmed' : 'cancelled'">
-                    {{ row.room_status }}
+                  <span class="status-pill" [ngClass]="row.property_status === 'active' ? 'confirmed' : 'cancelled'">
+                    {{ row.property_status }}
                   </span>
                 </td>
                 <td>{{ row.capacity }}</td>
@@ -305,7 +326,7 @@ export class InventoryComponent {
   data: InventoryResponse = {
     period: { from: '', to: '' },
     summary: {
-      room_types: 0,
+      property_types: 0,
       hotels: 0,
       registered_quantity: 0,
       booked_quantity: 0,
@@ -326,7 +347,8 @@ export class InventoryComponent {
   };
 
   manualBooking = {
-    roomId: '',
+    propertyType: 'room' as 'room' | 'tent',
+    propertyId: '',
     from: '',
     to: '',
     bookedQuantity: 1,
@@ -388,10 +410,7 @@ export class InventoryComponent {
       next: (resp) => {
         this.data = resp;
         this.rows = resp.rows || [];
-        const roomStillVisible = this.rows.some((row) => String(row.room_id) === this.manualBooking.roomId);
-        if (!roomStillVisible) {
-          this.manualBooking.roomId = this.rows.length ? String(this.rows[0].room_id) : '';
-        }
+        this.syncSelectedManualProperty();
         this.loading = false;
       },
       error: () => {
@@ -402,11 +421,11 @@ export class InventoryComponent {
   }
 
   saveManualBooking(): void {
-    const roomId = Number(this.manualBooking.roomId);
+    const propertyId = Number(this.manualBooking.propertyId);
     const bookedQuantity = Number(this.manualBooking.bookedQuantity);
 
-    if (!roomId) {
-      this.toast.error('Please select a room.');
+    if (!propertyId) {
+      this.toast.error('Please select a property.');
       return;
     }
     if (!this.manualBooking.from || !this.manualBooking.to || this.manualBooking.to <= this.manualBooking.from) {
@@ -421,7 +440,8 @@ export class InventoryComponent {
     this.savingManualBooking = true;
     this.http
       .post(`${environment.apiUrl}/admin/inventory/manual-bookings`, {
-        roomId,
+        propertyType: this.manualBooking.propertyType,
+        propertyId,
         from: this.manualBooking.from,
         to: this.manualBooking.to,
         bookedQuantity,
@@ -438,6 +458,32 @@ export class InventoryComponent {
           this.toast.error(err?.error?.message || 'Unable to save manual booking.');
         }
       });
+  }
+
+  get filteredProperties(): InventoryRow[] {
+    return this.rows.filter((row) => row.property_type === this.manualBooking.propertyType);
+  }
+
+  onManualTypeChange(): void {
+    this.syncSelectedManualProperty();
+  }
+
+  private syncSelectedManualProperty(): void {
+    if (!this.filteredProperties.length) {
+      const fallbackType = this.manualBooking.propertyType === 'room' ? 'tent' : 'room';
+      const fallbackRows = this.rows.filter((row) => row.property_type === fallbackType);
+      if (fallbackRows.length) {
+        this.manualBooking.propertyType = fallbackType;
+      }
+    }
+    const selectedStillVisible = this.filteredProperties.some(
+      (row) => String(row.property_id) === this.manualBooking.propertyId
+    );
+    if (!selectedStillVisible) {
+      this.manualBooking.propertyId = this.filteredProperties.length
+        ? String(this.filteredProperties[0].property_id)
+        : '';
+    }
   }
 
   private toYmd(date: Date): string {

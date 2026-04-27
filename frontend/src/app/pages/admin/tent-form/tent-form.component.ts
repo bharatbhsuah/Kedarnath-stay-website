@@ -18,6 +18,7 @@ interface AdminTent {
   type: string;
   description?: string;
   capacity: number;
+  quantity: number;
   registrationAmount: number;
   arrivalAmount: number;
   totalPrice: number;
@@ -95,6 +96,13 @@ interface AdminHotelOption {
             <label class="block text-xs uppercase mb-1 tracking-widest">Total Price</label>
             <input type="number" [value]="computedTotal" readonly />
           </div>
+          <div>
+            <label class="block text-xs uppercase mb-1 tracking-widest">Quantity</label>
+            <input type="number" min="1" formControlName="quantity" />
+            <div class="text-xs text-red-600" *ngIf="submitted && form.get('quantity')?.invalid">
+              Quantity must be at least 1.
+            </div>
+          </div>
         </div>
         <div>
           <label class="block text-xs uppercase mb-1 tracking-widest">Amenities</label>
@@ -154,6 +162,7 @@ export class TentFormComponent {
     type: ['standard', Validators.required],
     description: [''],
     capacity: [2, [Validators.required, Validators.min(1)]],
+    quantity: [1, [Validators.required, Validators.min(1)]],
     registrationAmount: [null as number | null, [Validators.required, Validators.min(0.01)]],
     arrivalAmount: [null as number | null, [Validators.required, Validators.min(0.01)]],
     amenities: this.fb.array<string>([]),
@@ -281,6 +290,7 @@ export class TentFormComponent {
           type: tent.type,
           description: tent.description || '',
           capacity: tent.capacity,
+          quantity: tent.quantity || 1,
           registrationAmount: tent.registrationAmount,
           arrivalAmount: tent.arrivalAmount,
           status: tent.status

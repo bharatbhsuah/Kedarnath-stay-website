@@ -75,6 +75,7 @@ const routes: Routes = [
       { path: 'rooms', component: ManageRoomsComponent },
       { path: 'inventory', component: InventoryComponent },
       { path: 'inventory/rooms/:roomId/bookings', component: RoomBookingsComponent },
+      { path: 'inventory/tents/:tentId/bookings', component: RoomBookingsComponent },
       { path: 'rooms/new', component: RoomFormComponent },
       { path: 'rooms/:id/edit', component: RoomFormComponent },
       { path: 'tents', component: ManageTentsComponent },

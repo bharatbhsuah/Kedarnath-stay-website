@@ -11,6 +11,7 @@ export interface Tent {
   type: string;
   description?: string;
   capacity: number;
+  quantity: number;
   registrationAmount: number;
   arrivalAmount: number;
   totalPrice: number;

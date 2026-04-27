@@ -28,14 +28,15 @@ interface RoomBookingItem {
   guest_phone?: string;
 }
 
-interface RoomBookingResponse {
-  room: {
+interface PropertyBookingResponse {
+  property: {
     id: number;
     name: string;
     type: string;
     quantity: number;
     hotel_id: number | null;
     hotel_name: string;
+    property_type: 'room' | 'tent';
   };
   currentAndUpcoming: RoomBookingItem[];
   past: RoomBookingItem[];
@@ -48,9 +49,9 @@ interface RoomBookingResponse {
       <div class="flex flex-wrap items-end justify-between gap-3">
         <div>
           <a routerLink="/admin/inventory" class="text-xs text-blue-600 hover:underline">&larr; Back to Inventory</a>
-          <h1 class="font-heading text-2xl mt-1">Room Bookings</h1>
+          <h1 class="font-heading text-2xl mt-1">Property Bookings</h1>
           <p class="text-sm text-muted mt-1" *ngIf="roomName">
-            {{ roomName }} ({{ roomType }}) &middot; {{ hotelName }}
+            {{ roomName }} ({{ roomType }}) &middot; {{ hotelName }} &middot; {{ propertyType | uppercase }}
           </p>
         </div>
         <button class="btn-secondary text-xs" (click)="load()" [disabled]="loading" [class.btn-loading]="loading">
@@ -63,14 +64,14 @@ interface RoomBookingResponse {
       <div class="card p-3 sm:p-4">
         <h2 class="font-semibold text-sm uppercase tracking-widest mb-3">Current & Upcoming</h2>
         <div *ngIf="!loading && !currentAndUpcoming.length" class="text-sm text-muted">
-          No current or upcoming bookings for this room.
+          No current or upcoming bookings for this property.
         </div>
         <div *ngIf="currentAndUpcoming.length" class="overflow-x-auto">
           <table>
             <thead>
               <tr>
                 <th>Reference</th>
-                <th>Room ID(s)</th>
+                <th>Unit ID(s)</th>
                 <th>Guest</th>
                 <th>Contact</th>
                 <th>Stay</th>
@@ -106,13 +107,13 @@ interface RoomBookingResponse {
 
       <div class="card p-3 sm:p-4">
         <h2 class="font-semibold text-sm uppercase tracking-widest mb-3">Past Bookings</h2>
-        <div *ngIf="!loading && !past.length" class="text-sm text-muted">No past bookings for this room.</div>
+        <div *ngIf="!loading && !past.length" class="text-sm text-muted">No past bookings for this property.</div>
         <div *ngIf="past.length" class="overflow-x-auto">
           <table>
             <thead>
               <tr>
                 <th>Reference</th>
-                <th>Room ID(s)</th>
+                <th>Unit ID(s)</th>
                 <th>Guest</th>
                 <th>Contact</th>
                 <th>Stay</th>
@@ -149,7 +150,8 @@ interface RoomBookingResponse {
   `
 })
 export class RoomBookingsComponent {
-  roomId = 0;
+  propertyId = 0;
+  propertyType: 'room' | 'tent' = 'room';
   roomName = '';
   roomType = '';
   hotelName = '';
@@ -160,26 +162,32 @@ export class RoomBookingsComponent {
 
   constructor(private route: ActivatedRoute, private http: HttpClient, private toast: ToastService) {
     this.route.paramMap.subscribe((params) => {
-      const id = Number(params.get('roomId'));
+      const id = Number(params.get('roomId') || params.get('tentId'));
+      this.propertyType = params.get('tentId') ? 'tent' : 'room';
       if (!Number.isInteger(id) || id <= 0) {
-        this.toast.error('Invalid room.');
+        this.toast.error('Invalid property.');
         return;
       }
-      this.roomId = id;
+      this.propertyId = id;
       this.load();
     });
   }
 
   load(): void {
-    if (!this.roomId) return;
+    if (!this.propertyId) return;
     this.loading = true;
+    const url =
+      this.propertyType === 'room'
+        ? `${environment.apiUrl}/admin/inventory/rooms/${this.propertyId}/bookings`
+        : `${environment.apiUrl}/admin/inventory/tents/${this.propertyId}/bookings`;
     this.http
-      .get<RoomBookingResponse>(`${environment.apiUrl}/admin/inventory/rooms/${this.roomId}/bookings`)
+      .get<PropertyBookingResponse>(url)
       .subscribe({
         next: (resp) => {
-          this.roomName = resp.room?.name || '';
-          this.roomType = resp.room?.type || '';
-          this.hotelName = resp.room?.hotel_name || '';
+          this.roomName = resp.property?.name || '';
+          this.roomType = resp.property?.type || '';
+          this.hotelName = resp.property?.hotel_name || '';
+          this.propertyType = resp.property?.property_type || this.propertyType;
           this.currentAndUpcoming = resp.currentAndUpcoming || [];
           this.past = resp.past || [];
           this.loading = false;
@@ -188,7 +196,7 @@ export class RoomBookingsComponent {
           this.loading = false;
           this.currentAndUpcoming = [];
           this.past = [];
-          this.toast.error(err?.error?.message || 'Unable to load room bookings.');
+          this.toast.error(err?.error?.message || 'Unable to load property bookings.');
         }
       });
   }
@@ -207,7 +215,9 @@ export class RoomBookingsComponent {
     this.cancelingBookingId = booking.id;
     const request$ =
       booking.source_type === 'manual' && booking.manual_booking_id
-        ? this.http.delete(`${environment.apiUrl}/admin/inventory/manual-bookings/${booking.manual_booking_id}`)
+        ? this.http.delete(
+            `${environment.apiUrl}/admin/inventory/manual-bookings/${booking.manual_booking_id}?propertyType=${this.propertyType}`
+          )
         : this.http.put(`${environment.apiUrl}/admin/bookings/${booking.id}/status`, { status: 'cancelled' });
     request$.subscribe({
       next: () => {

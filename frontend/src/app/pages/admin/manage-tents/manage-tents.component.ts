@@ -11,6 +11,7 @@ interface AdminTent {
   name: string;
   type: string;
   capacity: number;
+  quantity: number;
   registrationAmount: number;
   arrivalAmount: number;
   totalPrice: number;
@@ -45,6 +46,7 @@ interface AdminTent {
                 <th>Name</th>
                 <th>Type</th>
                 <th>Capacity</th>
+                <th>Qty</th>
                 <th>Downpayment</th>
                 <th>Arrival</th>
                 <th>Total</th>
@@ -58,6 +60,7 @@ interface AdminTent {
                 <td class="font-medium">{{ t.name }}</td>
                 <td>{{ t.type }}</td>
                 <td>{{ t.capacity }}</td>
+                <td>{{ t.quantity || 1 }}</td>
                 <td>{{ t.registrationAmount | currencyInr }}</td>
                 <td>{{ t.arrivalAmount | currencyInr }}</td>
                 <td>{{ t.totalPrice | currencyInr }}</td>

@@ -41,6 +41,7 @@ router.delete('/users/:id', requireAdmin, adminController.deleteUser);
 router.get('/rooms', requireAdminOrHotelAdmin, adminController.listRooms);
 router.get('/inventory', requireAdminOrHotelAdmin, adminController.listInventory);
 router.get('/inventory/rooms/:roomId/bookings', requireAdminOrHotelAdmin, adminController.listRoomBookings);
+router.get('/inventory/tents/:tentId/bookings', requireAdminOrHotelAdmin, adminController.listTentBookings);
 router.post('/inventory/manual-bookings', requireAdminOrHotelAdmin, adminController.createManualRoomBooking);
 router.delete('/inventory/manual-bookings/:id', requireAdminOrHotelAdmin, adminController.deleteManualRoomBooking);
 router.post('/rooms', requireAdminOrHotelAdmin, adminController.createRoom);
